@@ -9,7 +9,7 @@ services:
       context: .
       dockerfile: ./x86/Dockerfile
       args:
-        PCCT_USE_TUNA_MIRROR: ${PCCT_USE_TUNA_MIRROR:-1}
+        PCCT_UBUNTU_MIRROR: ${PCCT_UBUNTU_MIRROR:-http://mirrors.aliyun.com/ubuntu}
 
   arm:
     build:

@@ -20,7 +20,6 @@ COMMON_ARGS="\
     --disable-doc \
     --disable-podpages \
     --disable-debug \
-    --disable-network \
     --disable-asm \
     --disable-symver \
     --enable-static \
@@ -33,7 +32,6 @@ COMMON_ARGS="\
     --enable-decoders \
     --enable-demuxers \
     --enable-parsers \
-    --enable-protocol=file \
     --enable-zlib"
 
 export CFLAGS="${CFLAGS:-} -O2 -fPIC"
@@ -60,6 +58,32 @@ if [ "$PCCT_IS_CROSS" = "1" ]; then
     if [ -n "${SYSROOT:-}" ]; then
         CFG_ARGS="$CFG_ARGS --sysroot=$SYSROOT"
     fi
+fi
+
+if [ "$PCCT_TARGET" = "x86" ]; then
+    COMMON_ARGS="$COMMON_ARGS \
+        --enable-version3 \
+        --enable-network \
+        --enable-mbedtls \
+        --enable-libdrm \
+        --enable-vaapi \
+        --enable-decoder=h264 \
+        --enable-hwaccel=h264_vaapi \
+        --enable-encoder=mjpeg \
+        --enable-parser=h264 \
+        --enable-bsf=h264_mp4toannexb \
+        --enable-demuxer=rtsp \
+        --enable-demuxer=rtp \
+        --enable-demuxer=h264 \
+        --enable-protocol=file \
+        --enable-protocol=http \
+        --enable-protocol=https \
+        --enable-protocol=tcp \
+        --enable-protocol=tls \
+        --enable-protocol=udp \
+        --enable-protocol=rtp"
+else
+    COMMON_ARGS="$COMMON_ARGS --disable-network --enable-protocol=file"
 fi
 
 # shellcheck disable=SC2086

@@ -4,6 +4,9 @@ FROM debian:bookworm-slim AS fetcher
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+ARG PCCT_HTTP_PROXY=http://host.docker.internal:7890
+ENV PCCT_HTTP_PROXY=${PCCT_HTTP_PROXY}
+
 COPY sources/dependency-versions.sh /work/dependency-versions.sh
 COPY sources/fetch-github-sources.sh /work/fetch-github-sources.sh
 
@@ -12,18 +15,15 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 RUN chmod +x /work/*.sh && \
-    /work/fetch-github-sources.sh /dist curl freetype libusb sqlite ffmpeg lvgl && \
-    echo "Fetching PostgreSQL 17.2..." && \
-    wget -q --https-only --tries=5 --waitretry=10 \
-        -O /dist/postgresql-REL_17_2.tar.gz \
-        https://github.com/postgres/postgres/archive/refs/tags/REL_17_2.tar.gz && \
-    echo "PostgreSQL 17.2 fetched successfully"
+    /work/fetch-github-sources.sh /dist \
+        curl libxml2 freetype libusb sqlite ffmpeg postgresql \
+        libpeer libsrtp mbedtls laneapp-lvgl
 
-FROM --platform=${BASE_PLATFORM} debian:trixie-slim
+FROM --platform=${BASE_PLATFORM} i386/ubuntu:16.04
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-ARG PCCT_USE_TUNA_MIRROR=1
+ARG PCCT_UBUNTU_MIRROR=http://mirrors.aliyun.com/ubuntu
 
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=Asia/Shanghai \
@@ -39,77 +39,127 @@ ENV DEBIAN_FRONTEND=noninteractive \
     OBJDUMP=objdump \
     PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/share/pkgconfig
 
-RUN printf '%s\n' \
+RUN sed -i \
+        -e "s|http://archive.ubuntu.com/ubuntu/|${PCCT_UBUNTU_MIRROR}/|g" \
+        -e "s|http://security.ubuntu.com/ubuntu/|${PCCT_UBUNTU_MIRROR}/|g" \
+        /etc/apt/sources.list && \
+    printf '%s\n' \
         'Acquire::Retries "5";' \
         'Acquire::http::Timeout "60";' \
         'Acquire::https::Timeout "60";' \
         'Acquire::http::Pipeline-Depth "0";' \
         > /etc/apt/apt.conf.d/99laneapp-network && \
-    rm -f /etc/apt/sources.list.d/debian.sources && \
-    if [ "$PCCT_USE_TUNA_MIRROR" = "1" ]; then \
-        DEBIAN_MIRROR='http://mirrors.tuna.tsinghua.edu.cn/debian'; \
-        DEBIAN_SECURITY_MIRROR='http://mirrors.tuna.tsinghua.edu.cn/debian-security'; \
-    else \
-        DEBIAN_MIRROR='http://deb.debian.org/debian'; \
-        DEBIAN_SECURITY_MIRROR='http://deb.debian.org/debian-security'; \
-    fi && \
-    printf '%s\n' \
-        "deb ${DEBIAN_MIRROR} trixie main" \
-        "deb ${DEBIAN_MIRROR} trixie-updates main" \
-        "deb ${DEBIAN_SECURITY_MIRROR} trixie-security main" \
-        > /etc/apt/sources.list && \
     for attempt in 1 2 3 4 5; do \
         rm -rf /var/lib/apt/lists/*; \
         if apt-get update && \
            apt-get install -y --no-install-recommends --fix-missing \
                autoconf \
                automake \
-               gcc \
-               g++ \
+               binutils \
+               build-essential \
                ca-certificates \
+               clang-6.0 \
+               cmake \
+               curl \
                file \
                flex \
                bison \
-               libconfig-dev \
-               libjpeg-dev \
-               libpq-dev \
-               libudev-dev \
+               g++ \
+               gcc \
+               gdb \
+               gdbserver \
+               git \
                lbzip2 \
+               libasan2 \
+               libclang-common-6.0-dev \
+               libconfig-dev \
+               libdrm-dev \
+               libfreetype6-dev \
+               libgtk2.0-dev \
+               libjpeg-dev \
+               libpciaccess-dev \
+               libpng12-dev \
                libtool \
                libtool-bin \
+               libubsan0 \
+               libudev-dev \
+               libva-dev \
+               ltrace \
                m4 \
                make \
+               patch \
                perl \
                pkg-config \
+               python3 \
+               strace \
+               unzip \
+               valgrind \
                wget \
+               xz-utils \
+               zip \
+               i965-va-driver \
                zlib1g-dev; then \
             break; \
         fi; \
         if [ "$attempt" = "5" ]; then \
             exit 1; \
         fi; \
-        echo "apt attempt $attempt failed, retrying..." >&2; \
         sleep 10; \
     done && \
+    ln -sf /usr/bin/python3 /usr/local/bin/python && \
     rm -rf /var/lib/apt/lists/*
 
 COPY rebuildcurl.sh /work/rebuildcurl.sh
 COPY sources/build-common.sh /work/build-common.sh
 COPY sources/build-selected-deps.sh /work/build-selected-deps.sh
 COPY sources/dependency-versions.sh /work/dependency-versions.sh
-COPY sources/lv_conf.h /work/lv_conf.h
+COPY sources/export-vaapi-runtime.sh /work/export-vaapi-runtime.sh
+COPY sources/lane2nd-lv_conf.h /work/lane2nd-lv_conf.h
+COPY sources/libpeer-lanecamera.patch /work/libpeer-lanecamera.patch
 COPY sources/rebuildffmpeg.sh /work/rebuildffmpeg.sh
 COPY sources/rebuildfreetype.sh /work/rebuildfreetype.sh
+COPY sources/rebuildlaneapp-lvgl.sh /work/rebuildlaneapp-lvgl.sh
+COPY sources/rebuildlibpeer.sh /work/rebuildlibpeer.sh
 COPY sources/rebuildlibusb.sh /work/rebuildlibusb.sh
-COPY sources/rebuildlvgl.sh /work/rebuildlvgl.sh
-COPY sources/rebuildsqlite.sh /work/rebuildsqlite.sh
+COPY sources/rebuildlibxml2.sh /work/rebuildlibxml2.sh
+COPY sources/rebuildmbedtls.sh /work/rebuildmbedtls.sh
+COPY sources/rebuildminigui.sh /work/rebuildminigui.sh
 COPY sources/rebuildpostgresql.sh /work/rebuildpostgresql.sh
+COPY sources/rebuildsqlite.sh /work/rebuildsqlite.sh
+COPY sources/verify-x86-static.sh /work/verify-x86-static.sh
 COPY --from=fetcher /dist/ /dist/
+COPY sources/minigui2.0.4-eb30dfdc.tar.gz /work/minigui2.0.4-eb30dfdc.tar.gz
 
-RUN chmod +x /work/*.sh && \
-    /work/build-selected-deps.sh x86 freetype sqlite libusb curl ffmpeg lvgl postgresql && \
-    rm -rf /dist
+RUN test -f /usr/lib/i386-linux-gnu/libz.a && \
+    mkdir -p /usr/local/lib/pkgconfig && \
+    zlib_version="$(pkg-config --modversion zlib)" && \
+    printf '%s\n' \
+        'prefix=/usr' \
+        'exec_prefix=${prefix}' \
+        'libdir=${prefix}/lib/i386-linux-gnu' \
+        'includedir=${prefix}/include' \
+        '' \
+        'Name: zlib' \
+        'Description: zlib compression library (PCCT static profile)' \
+        "Version: ${zlib_version}" \
+        'Libs: -L${libdir} -l:libz.a' \
+        'Cflags: -I${includedir}' \
+        > /usr/local/lib/pkgconfig/zlib.pc && \
+    chmod +x /work/*.sh && \
+    /work/rebuildminigui.sh && \
+    /work/build-selected-deps.sh x86 \
+        mbedtls curl libxml2 freetype sqlite libusb ffmpeg postgresql \
+        libpeer laneapp-lvgl && \
+    find /usr/local/lib/pkgconfig -type f -name '*.pc' \
+        -exec sed -i 's/-lz\([[:space:]]\|$\)/-l:libz.a\1/g' {} + && \
+    /work/export-vaapi-runtime.sh && \
+    /work/verify-x86-static.sh && \
+    rm -rf /dist /tmp/pcct-* /tmp/pcct-static-smoke*
 
-WORKDIR /LaneApp
+ENV LD_LIBRARY_PATH=/usr/local/lib \
+    LIBRARY_PATH=/usr/local/lib \
+    CMAKE_PREFIX_PATH=/usr/local \
+    LANE_CAMERA_CC=gcc
 
+WORKDIR /tmp/LaneApp
 CMD ["bash"]

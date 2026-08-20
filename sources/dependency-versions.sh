@@ -2,15 +2,26 @@
 
 set -eu
 
-# Conservative dependency baseline for the legacy images:
-# - ARM cross toolchain gcc 4.6.1
-# - Debian wheezy era native x86 toolchain
+# Conservative dependency baseline shared by the legacy and Ubuntu 16 images.
+# Keep source revisions compatible with GCC 4.6/4.7 unless a dependency is
+# explicitly built only by the Ubuntu 16 X86 image.
+
+OPENSSL_VERSION=1.1.1w
+OPENSSL_TAG=OpenSSL_1_1_1w
+OPENSSL_ARCHIVE="openssl-${OPENSSL_TAG}.tar.gz"
+OPENSSL_URL="https://github.com/openssl/openssl/archive/refs/tags/${OPENSSL_TAG}.tar.gz"
+OPENSSL_SHA256="2130E8C2FB3B79D1086186F78E59E8BC8D1A6AEDF17AB3907F4CB9AE20918C41"
 
 CURL_VERSION=8.10.1
 CURL_TAG=curl-8_10_1
 CURL_ARCHIVE="curl-${CURL_VERSION}.tar.gz"
 CURL_URL="https://github.com/curl/curl/releases/download/${CURL_TAG}/${CURL_ARCHIVE}"
 CURL_SHA256="D15EBAB765D793E2E96DB090F0E172D127859D78CA6F6391D7EAFECFD894BBC0"
+
+LIBXML2_VERSION=2.12.10
+LIBXML2_ARCHIVE="libxml2-${LIBXML2_VERSION}.tar.xz"
+LIBXML2_URL="https://download.gnome.org/sources/libxml2/2.12/${LIBXML2_ARCHIVE}"
+LIBXML2_SHA256="C3D8C0C34AA39098F66576FE51969DB12A5100B956233DC56506F7A8679BE995"
 
 FREETYPE_VERSION=2.13.3
 FREETYPE_TAG=VER-2-13-3
@@ -42,6 +53,27 @@ LVGL_ARCHIVE="lvgl-${LVGL_TAG}.tar.gz"
 LVGL_URL="https://github.com/lvgl/lvgl/archive/refs/tags/${LVGL_TAG}.tar.gz"
 LVGL_SHA256="34A955CDF3A2D005507B704E87357AF669A114523B6D3F77B5344FDC68717BC6"
 
+LANEAPP_LVGL_VERSION=9.3.0
+LANEAPP_LVGL_TAG=v9.3.0
+LANEAPP_LVGL_ARCHIVE="laneapp-lvgl-${LANEAPP_LVGL_TAG}.tar.gz"
+LANEAPP_LVGL_URL="https://github.com/lvgl/lvgl/archive/refs/tags/${LANEAPP_LVGL_TAG}.tar.gz"
+LANEAPP_LVGL_SHA256="4933BECFD3603B29158A5D04138139582836EF2BC17BEB6C39DCCDA9CB0D32E7"
+
+LIBPEER_VERSION=9319aa434cb9e893faed0293ba9d2a21eca59c8b
+LIBPEER_ARCHIVE="libpeer-${LIBPEER_VERSION}.tar.gz"
+LIBPEER_URL="https://github.com/sepfy/libpeer/archive/${LIBPEER_VERSION}.tar.gz"
+LIBPEER_SHA256="C2EC1C47F7E429EE4CCF0C0F75FB0D7F3C0DB3A0DC16EF9738AA4F1C19DAA97B"
+
+LIBSRTP_VERSION=90d05bf8980d16e4ac3f16c19b77e296c4bc207b
+LIBSRTP_ARCHIVE="libsrtp-${LIBSRTP_VERSION}.tar.gz"
+LIBSRTP_URL="https://github.com/cisco/libsrtp/archive/${LIBSRTP_VERSION}.tar.gz"
+LIBSRTP_SHA256="0CAEC0CF84569463C1FF186FE6A92101FE9036375140DD4588170787925F5335"
+
+MBEDTLS_VERSION=1873d3bfc2da771672bd8e7e8f41f57e0af77f33
+MBEDTLS_ARCHIVE="mbedtls-${MBEDTLS_VERSION}.tar.gz"
+MBEDTLS_URL="https://github.com/Mbed-TLS/mbedtls/archive/${MBEDTLS_VERSION}.tar.gz"
+MBEDTLS_SHA256="E639DB55558CE853D4AD916C0EC89F04263F36DA4BE582A6BB7E1F22A59D7216"
+
 POSTGRESQL_VERSION=17.2
 POSTGRESQL_TAG=REL_17_2
 POSTGRESQL_ARCHIVE="postgresql-${POSTGRESQL_TAG}.tar.gz"
@@ -51,12 +83,18 @@ POSTGRESQL_SHA256="DEA967B2C9FD112C27478354E3FCF8D5A5F00ACC7CC6D8D185C3FAE70B6EB
 
 pcct_dep_archive() {
     case "$1" in
+        openssl) echo "$OPENSSL_ARCHIVE" ;;
         curl) echo "$CURL_ARCHIVE" ;;
+        libxml2) echo "$LIBXML2_ARCHIVE" ;;
         freetype) echo "$FREETYPE_ARCHIVE" ;;
         libusb) echo "$LIBUSB_ARCHIVE" ;;
         sqlite) echo "$SQLITE_ARCHIVE" ;;
         ffmpeg) echo "$FFMPEG_ARCHIVE" ;;
         lvgl) echo "$LVGL_ARCHIVE" ;;
+        laneapp-lvgl) echo "$LANEAPP_LVGL_ARCHIVE" ;;
+        libpeer) echo "$LIBPEER_ARCHIVE" ;;
+        libsrtp) echo "$LIBSRTP_ARCHIVE" ;;
+        mbedtls) echo "$MBEDTLS_ARCHIVE" ;;
         postgresql) echo "$POSTGRESQL_ARCHIVE" ;;
         *)
             echo "unknown dependency: $1" >&2
@@ -67,12 +105,18 @@ pcct_dep_archive() {
 
 pcct_dep_url() {
     case "$1" in
+        openssl) echo "$OPENSSL_URL" ;;
         curl) echo "$CURL_URL" ;;
+        libxml2) echo "$LIBXML2_URL" ;;
         freetype) echo "$FREETYPE_URL" ;;
         libusb) echo "$LIBUSB_URL" ;;
         sqlite) echo "$SQLITE_URL" ;;
         ffmpeg) echo "$FFMPEG_URL" ;;
         lvgl) echo "$LVGL_URL" ;;
+        laneapp-lvgl) echo "$LANEAPP_LVGL_URL" ;;
+        libpeer) echo "$LIBPEER_URL" ;;
+        libsrtp) echo "$LIBSRTP_URL" ;;
+        mbedtls) echo "$MBEDTLS_URL" ;;
         postgresql) echo "$POSTGRESQL_URL" ;;
         *)
             echo "unknown dependency: $1" >&2
@@ -83,12 +127,18 @@ pcct_dep_url() {
 
 pcct_dep_sha256() {
     case "$1" in
+        openssl) echo "$OPENSSL_SHA256" ;;
         curl) echo "$CURL_SHA256" ;;
+        libxml2) echo "$LIBXML2_SHA256" ;;
         freetype) echo "$FREETYPE_SHA256" ;;
         libusb) echo "$LIBUSB_SHA256" ;;
         sqlite) echo "$SQLITE_SHA256" ;;
         ffmpeg) echo "$FFMPEG_SHA256" ;;
         lvgl) echo "$LVGL_SHA256" ;;
+        laneapp-lvgl) echo "$LANEAPP_LVGL_SHA256" ;;
+        libpeer) echo "$LIBPEER_SHA256" ;;
+        libsrtp) echo "$LIBSRTP_SHA256" ;;
+        mbedtls) echo "$MBEDTLS_SHA256" ;;
         postgresql) echo "$POSTGRESQL_SHA256" ;;
         *)
             echo "unknown dependency: $1" >&2
@@ -99,12 +149,18 @@ pcct_dep_sha256() {
 
 pcct_dep_version() {
     case "$1" in
+        openssl) echo "$OPENSSL_VERSION" ;;
         curl) echo "$CURL_VERSION" ;;
+        libxml2) echo "$LIBXML2_VERSION" ;;
         freetype) echo "$FREETYPE_VERSION" ;;
         libusb) echo "$LIBUSB_VERSION" ;;
         sqlite) echo "$SQLITE_VERSION" ;;
         ffmpeg) echo "$FFMPEG_VERSION" ;;
         lvgl) echo "$LVGL_VERSION" ;;
+        laneapp-lvgl) echo "$LANEAPP_LVGL_VERSION" ;;
+        libpeer) echo "$LIBPEER_VERSION" ;;
+        libsrtp) echo "$LIBSRTP_VERSION" ;;
+        mbedtls) echo "$MBEDTLS_VERSION" ;;
         postgresql) echo "$POSTGRESQL_VERSION" ;;
         *)
             echo "unknown dependency: $1" >&2

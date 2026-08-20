@@ -26,7 +26,7 @@ fi
 
 COMMON_CURL_ARGS="\
     --disable-shared --enable-static --with-pic \
-    --without-ssl --without-librtmp --without-zlib \
+    --without-librtmp --with-zlib \
     --without-brotli --without-zstd --without-libpsl --without-libidn2 \
     --without-nghttp2 --without-nghttp3 --without-ngtcp2 \
     --disable-ldap --disable-rtsp --disable-dict --disable-smtp --disable-gopher --disable-manual \
@@ -45,6 +45,7 @@ case "$PCCT_TARGET" in
             --prefix="$PCCT_PREFIX" \
             --libdir="$PCCT_LIBDIR" \
             --includedir="$PCCT_INCLUDEDIR" \
+            --with-mbedtls="$PCCT_PREFIX" \
             $COMMON_CURL_ARGS
         ;;
     x64|X64)
@@ -55,6 +56,7 @@ case "$PCCT_TARGET" in
             --prefix="$PCCT_PREFIX" \
             --libdir="$PCCT_LIBDIR" \
             --includedir="$PCCT_INCLUDEDIR" \
+            --without-ssl \
             $COMMON_CURL_ARGS
         ;;
     arm)
@@ -71,6 +73,7 @@ case "$PCCT_TARGET" in
             --prefix="$PCCT_PREFIX" \
             --libdir="$PCCT_LIBDIR" \
             --includedir="$PCCT_INCLUDEDIR" \
+            --without-ssl \
             $COMMON_CURL_ARGS
         ;;
     arm64|ARM64)
@@ -81,6 +84,7 @@ case "$PCCT_TARGET" in
             --prefix="$PCCT_PREFIX" \
             --libdir="$PCCT_LIBDIR" \
             --includedir="$PCCT_INCLUDEDIR" \
+            --without-ssl \
             $COMMON_CURL_ARGS
         ;;
     la64|LA64)
@@ -91,6 +95,7 @@ case "$PCCT_TARGET" in
             --prefix="$PCCT_PREFIX" \
             --libdir="$PCCT_LIBDIR" \
             --includedir="$PCCT_INCLUDEDIR" \
+            --without-ssl \
             $COMMON_CURL_ARGS
         ;;
     *)

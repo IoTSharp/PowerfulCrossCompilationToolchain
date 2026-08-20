@@ -1,0 +1,603 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 83789d0..1f1ff1d 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -16,7 +16,7 @@ if (DEFINED ENV{IDF_PATH})
+   return()
+ endif()
+
+-project(peer)
++project(peer C)
+
+ option(ENABLE_TESTS "Enable tests" OFF)
+ option(BUILD_SHARED_LIBS "Build shared libraries" ON)
+diff --git a/src/agent.c b/src/agent.c
+index 57de5c9..4efc960 100644
+--- a/src/agent.c
++++ b/src/agent.c
+@@ -23,9 +23,21 @@ void agent_clear_candidates(Agent* agent) {
+   agent->candidate_pairs_num = 0;
+ }
+
+-int agent_create(Agent* agent) {
+-  int ret;
+-  if ((ret = udp_socket_open(&agent->udp_sockets[0], AF_INET, 0)) < 0) {
++int agent_create(Agent* agent, uint16_t port_range_begin, uint16_t port_range_end) {
++  int ret = -1;
++  uint32_t port = port_range_begin;
++
++  agent->udp_sockets[0].fd = -1;
++  agent->udp_sockets[1].fd = -1;
++  if (port_range_begin > 0 && port_range_end >= port_range_begin) {
++    while (ret < 0 && port <= port_range_end) {
++      ret = udp_socket_open(&agent->udp_sockets[0], AF_INET, (int)port);
++      port++;
++    }
++  } else {
++    ret = udp_socket_open(&agent->udp_sockets[0], AF_INET, 0);
++  }
++  if (ret < 0) {
+     LOGE("Failed to create UDP socket.");
+     return ret;
+   }
+@@ -342,14 +354,27 @@ static void agent_create_binding_request(Agent* agent, StunMessage* msg) {
+ void agent_process_stun_request(Agent* agent, StunMessage* stun_msg, Address* addr) {
+   StunMessage msg;
+   StunHeader* header;
++  char addr_string[ADDRSTRLEN];
+   switch (stun_msg->stunmethod) {
+     case STUN_METHOD_BINDING:
+       if (stun_msg_is_valid(stun_msg->buf, stun_msg->size, agent->local_upwd) == 0) {
+         header = (StunHeader*)stun_msg->buf;
+         memcpy(agent->transaction_id, header->transaction_id, sizeof(header->transaction_id));
+         agent_create_binding_response(agent, &msg, addr);
+-        agent_socket_send(agent, addr, msg.buf, msg.size);
+-        agent->binding_request_time = ports_get_epoch_time();
++        if (agent_socket_send(agent, addr, msg.buf, msg.size) >= 0) {
++          agent->binding_request_time = ports_get_epoch_time();
++          /* A nominated authenticated source is the usable peer-reflexive path. */
++          if (stun_msg->use_candidate && agent->nominated_pair != NULL &&
++              agent->nominated_pair->remote != NULL &&
++              agent->nominated_pair->state == ICE_CANDIDATE_STATE_INPROGRESS) {
++            memcpy(&agent->nominated_pair->remote->addr, addr, sizeof(Address));
++            agent->nominated_pair->remote->type = ICE_CANDIDATE_TYPE_PRFLX;
++            agent->nominated_pair->state = ICE_CANDIDATE_STATE_SUCCEEDED;
++            addr_to_string(addr, addr_string, sizeof(addr_string));
++            LOGI("Accepted peer-reflexive ICE source %s:%d", addr_string,
++                 addr->port);
++          }
++        }
+       }
+       break;
+     default:
+diff --git a/src/agent.h b/src/agent.h
+index 382d5a4..d19efb4 100644
+--- a/src/agent.h
++++ b/src/agent.h
+@@ -90,7 +90,7 @@ int agent_connectivity_check(Agent* agent);
+
+ void agent_clear_candidates(Agent* agent);
+
+-int agent_create(Agent* agent);
++int agent_create(Agent* agent, uint16_t port_range_begin, uint16_t port_range_end);
+
+ void agent_destroy(Agent* agent);
+
+diff --git a/src/mdns.c b/src/mdns.c
+index 6d7881c..8e1f55f 100644
+--- a/src/mdns.c
++++ b/src/mdns.c
+@@ -2,6 +2,7 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
++#include <strings.h>
+ #include <sys/select.h>
+ #include <unistd.h>
+ #include "address.h"
+@@ -53,41 +54,162 @@ static int mdns_add_hostname(const char* hostname, uint8_t* buf, int size) {
+   buf[offset++] = 0x00;
+   return offset;
+ }
+-static int mdns_parse_answer(uint8_t* buf, int size, Address* addr, const char* hostname) {
+-  int flags_qr, offset;
+-  DnsHeader* header;
+-  DnsAnswer* answer;
+-  uint8_t name[256];
+
+-  if (size < sizeof(DnsHeader)) {
+-    LOGE("response too short");
+-    return -1;
+-  }
++/* Decode a DNS name while preserving the caller's position after compression. */
++static int mdns_decode_name(const uint8_t* packet, int size, int start,
++                            char* name, int name_size, int* next_offset) {
++  int result = -1;
++  int offset = start;
++  int end_offset = -1;
++  int name_length = 0;
++  int steps = 0;
+
+-  header = (DnsHeader*)buf;
+-  flags_qr = ntohs(header->flags) >> 15;
+-  if (flags_qr != 1) {
+-    LOGD("flag is not a DNS response");
+-    return -1;
++  if (packet != NULL && name != NULL && name_size > 0 &&
++      next_offset != NULL && start >= 0 && start < size) {
++    name[0] = '\0';
++    while (result < 0 && steps <= size && offset >= 0 && offset < size) {
++      int label_length = packet[offset];
++      int required_length;
++
++      steps++;
++      if ((label_length & 0xc0) == 0xc0) {
++        if (offset + 1 < size) {
++          int pointer = ((label_length & 0x3f) << 8) | packet[offset + 1];
++          if (end_offset < 0) {
++            end_offset = offset + 2;
++          }
++          if (pointer < size) {
++            offset = pointer;
++          } else {
++            steps = size + 1;
++          }
++        } else {
++          steps = size + 1;
++        }
++      } else if ((label_length & 0xc0) != 0) {
++        steps = size + 1;
++      } else if (label_length == 0) {
++        if (end_offset < 0) {
++          end_offset = offset + 1;
++        }
++        name[name_length] = '\0';
++        *next_offset = end_offset;
++        result = 0;
++      } else {
++        offset++;
++        required_length = name_length + label_length +
++                          (name_length > 0 ? 1 : 0);
++        if (offset + label_length <= size && required_length < name_size) {
++          if (name_length > 0) {
++            name[name_length++] = '.';
++          }
++          memcpy(name + name_length, packet + offset, label_length);
++          name_length += label_length;
++          offset += label_length;
++        } else {
++          steps = size + 1;
++        }
++      }
++    }
+   }
+
+-  buf += sizeof(DnsHeader);
+-  offset = mdns_add_hostname(hostname, name, sizeof(name));
+-  // compare hostname
+-  if (memcmp(buf, name, offset)) {
+-    LOGI("not a mDNS response");
+-    return -1;
++  return result;
++}
++
++/* Read an unaligned network-order integer without casting packet storage. */
++static int mdns_read_u16(const uint8_t* packet, int size, int offset,
++                         uint16_t* value) {
++  int result = -1;
++
++  if (packet != NULL && value != NULL && offset >= 0 && offset + 1 < size) {
++    *value = (uint16_t)(((uint16_t)packet[offset] << 8) |
++                        (uint16_t)packet[offset + 1]);
++    result = 0;
+   }
+
+-  answer = (DnsAnswer*)(buf + offset);
+-  LOGD("type: %" PRIu16 ", class: %" PRIu16 ", ttl: %" PRIu32 ", length: %" PRIu16 "", ntohs(answer->type), ntohs(answer->class), ntohl(answer->ttl), ntohs(answer->length));
+-  if (ntohs(answer->length) != 4) {
+-    LOGI("invalid length");
+-    return -1;
++  return result;
++}
++
++static int mdns_parse_answer(uint8_t* buf, int size, Address* addr, const char* hostname) {
++  int result = -1;
++  int offset = (int)sizeof(DnsHeader);
++  int valid = 0;
++  int index;
++  int total_records = 0;
++  uint16_t flags = 0;
++  uint16_t question_count = 0;
++  uint16_t answer_count = 0;
++  uint16_t authority_count = 0;
++  uint16_t additional_count = 0;
++  char record_name[256];
++
++  if (buf != NULL && addr != NULL && hostname != NULL &&
++      size >= (int)sizeof(DnsHeader) &&
++      mdns_read_u16(buf, size, 2, &flags) == 0 &&
++      mdns_read_u16(buf, size, 4, &question_count) == 0 &&
++      mdns_read_u16(buf, size, 6, &answer_count) == 0 &&
++      mdns_read_u16(buf, size, 8, &authority_count) == 0 &&
++      mdns_read_u16(buf, size, 10, &additional_count) == 0) {
++    valid = 1;
++    if ((flags >> 15) != 1) {
++      LOGD("flag is not a DNS response");
++      valid = 0;
++    }
++
++    /* Questions have a variable-length name followed by fixed type/class. */
++    for (index = 0; valid && index < question_count; index++) {
++      int next_offset = 0;
++      if (mdns_decode_name(buf, size, offset, record_name,
++                           sizeof(record_name), &next_offset) != 0 ||
++          next_offset > size - 4) {
++        valid = 0;
++      } else {
++        offset = next_offset + 4;
++      }
++    }
++
++    total_records = answer_count + authority_count + additional_count;
++    for (index = 0; valid && result < 0 && index < total_records; index++) {
++      int next_offset = 0;
++      int data_offset = 0;
++      int searchable = index < answer_count ||
++                       index >= answer_count + authority_count;
++      uint16_t record_type = 0;
++      uint16_t record_class = 0;
++      uint16_t data_length = 0;
++
++      if (mdns_decode_name(buf, size, offset, record_name,
++                           sizeof(record_name), &next_offset) != 0 ||
++          next_offset > size - 10 ||
++          mdns_read_u16(buf, size, next_offset, &record_type) != 0 ||
++          mdns_read_u16(buf, size, next_offset + 2, &record_class) != 0 ||
++          mdns_read_u16(buf, size, next_offset + 8, &data_length) != 0) {
++        valid = 0;
++      } else {
++        data_offset = next_offset + 10;
++        if (data_offset > size - data_length) {
++          valid = 0;
++        } else {
++          /* Browser host candidates can appear in answer or additional RRs. */
++          if (searchable && record_type == 1 &&
++              (record_class & 0x7fff) == 1 && data_length == 4 &&
++              strcasecmp(record_name, hostname) == 0) {
++            memcpy(&addr->sin.sin_addr, buf + data_offset, 4);
++            result = 0;
++          }
++          offset = data_offset + data_length;
++        }
++      }
++    }
++
++    if (valid && result < 0) {
++      LOGD("No matching IPv4 mDNS answer for %s", hostname);
++    }
++  } else {
++    LOGD("mDNS response is malformed or too short");
+   }
+
+-  memcpy(&addr->sin.sin_addr, answer->data, 4);
+-  return 0;
++  return result;
+ }
+
+ static int mdns_build_query(const char* hostname, uint8_t* buf, int size) {
+diff --git a/src/peer_connection.c b/src/peer_connection.c
+index c763e80..6717d5a 100644
+--- a/src/peer_connection.c
++++ b/src/peer_connection.c
+@@ -160,7 +160,10 @@ PeerConnection* peer_connection_create(PeerConfiguration* config) {
+
+   memcpy(&pc->config, config, sizeof(PeerConfiguration));
+
+-  agent_create(&pc->agent);
++  if (agent_create(&pc->agent, config->port_range_begin, config->port_range_end) < 0) {
++    free(pc);
++    return NULL;
++  }
+
+   memset(&pc->sctp, 0, sizeof(pc->sctp));
+
+@@ -178,6 +181,12 @@ PeerConnection* peer_connection_create(PeerConfiguration* config) {
+
+     rtp_decoder_init(&pc->vrtp_decoder, pc->config.video_codec,
+                      pc->config.onvideotrack, pc->config.user_data);
++    if (pc->config.video_payload_type >= 96) {
++      pc->vrtp_encoder.type = (RtpPayloadType)pc->config.video_payload_type;
++    }
++    if (pc->config.video_ssrc != 0) {
++      pc->vrtp_encoder.ssrc = pc->config.video_ssrc;
++    }
+   }
+
+   return pc;
+@@ -213,6 +222,15 @@ int peer_connection_send_video(PeerConnection* pc, const uint8_t* buf, size_t le
+   return rtp_encoder_encode(&pc->vrtp_encoder, buf, len);
+ }
+
++int peer_connection_send_video_at(PeerConnection* pc, const uint8_t* buf,
++                                  size_t len, uint32_t timestamp) {
++  if (pc->state != PEER_CONNECTION_COMPLETED) {
++    return -1;
++  }
++  pc->vrtp_encoder.timestamp = timestamp;
++  return rtp_encoder_encode(&pc->vrtp_encoder, buf, len);
++}
++
+ int peer_connection_datachannel_send(PeerConnection* pc, char* message, size_t len) {
+   return peer_connection_datachannel_send_sid(pc, message, len, 0);
+ }
+@@ -454,7 +472,8 @@ static const char* peer_connection_create_sdp(PeerConnection* pc, SdpType sdp_ty
+   sdp_create(pc->sdp,
+              pc->config.video_codec != CODEC_NONE,
+              pc->config.audio_codec != CODEC_NONE,
+-             pc->config.datachannel);
++             pc->config.datachannel,
++             pc->config.video_mid);
+
+   agent_create_ice_credential(&pc->agent);
+   sdp_append(pc->sdp, "a=ice-ufrag:%s", pc->agent.local_ufrag);
+@@ -463,7 +482,12 @@ static const char* peer_connection_create_sdp(PeerConnection* pc, SdpType sdp_ty
+   sdp_append(pc->sdp, peer_connection_dtls_role_setup_value(role));
+
+   if (pc->config.video_codec == CODEC_H264) {
+-    sdp_append_h264(pc->sdp);
++    uint8_t payload_type = pc->config.video_payload_type >= 96 ?
++                               pc->config.video_payload_type : PT_H264;
++    uint32_t ssrc = pc->config.video_ssrc != 0 ?
++                        pc->config.video_ssrc : SSRC_H264;
++    sdp_append_h264(pc->sdp, payload_type, ssrc, pc->config.video_mid,
++                    pc->config.video_fmtp, pc->config.video_send_only);
+   }
+
+   switch (pc->config.audio_codec) {
+diff --git a/src/peer_connection.h b/src/peer_connection.h
+index b087893..931dc74 100644
+--- a/src/peer_connection.h
++++ b/src/peer_connection.h
+@@ -81,6 +81,14 @@ typedef struct PeerConfiguration {
+   void (*on_request_keyframe)(void* userdata);
+   void* user_data;
+
++  uint8_t video_payload_type;
++  uint32_t video_ssrc;
++  const char* video_mid;
++  const char* video_fmtp;
++  int video_send_only;
++  uint16_t port_range_begin;
++  uint16_t port_range_end;
++
+ } PeerConfiguration;
+
+ typedef struct PeerConnection PeerConnection;
+@@ -117,6 +125,9 @@ int peer_connection_send_audio(PeerConnection* pc, const uint8_t* packet, size_t
+
+ int peer_connection_send_video(PeerConnection* pc, const uint8_t* packet, size_t bytes);
+
++int peer_connection_send_video_at(PeerConnection* pc, const uint8_t* packet,
++                                  size_t bytes, uint32_t timestamp);
++
+ void peer_connection_set_remote_description(PeerConnection* pc, const char* sdp, SdpType sdp_type);
+
+ void peer_connection_set_local_description(PeerConnection* pc, const char* sdp, SdpType sdp_type);
+diff --git a/src/rtp.c b/src/rtp.c
+index 0a3136a..38f7542 100644
+--- a/src/rtp.c
++++ b/src/rtp.c
+@@ -43,34 +43,27 @@ uint32_t rtp_get_ssrc(uint8_t* packet) {
+   return ntohl(rtp_header->ssrc);
+ }
+
+-static int rtp_encoder_encode_h264_single(RtpEncoder* rtp_encoder, uint8_t* buf, size_t size) {
++static int rtp_encoder_encode_h264_single(RtpEncoder* rtp_encoder, uint8_t* buf,
++                                          size_t size, int marker) {
+   RtpPacket* rtp_packet = (RtpPacket*)rtp_encoder->buf;
+
+   rtp_packet->header.version = 2;
+   rtp_packet->header.padding = 0;
+   rtp_packet->header.extension = 0;
+   rtp_packet->header.csrccount = 0;
+-  rtp_packet->header.markerbit = 0;
++  rtp_packet->header.markerbit = marker;
+   rtp_packet->header.type = rtp_encoder->type;
+   rtp_packet->header.seq_number = htons(rtp_encoder->seq_number++);
+   rtp_packet->header.timestamp = htonl(rtp_encoder->timestamp);
+   rtp_packet->header.ssrc = htonl(rtp_encoder->ssrc);
+
+-  // I frame and P frame
+-  if ((*buf & 0x1f) == 0x05 || (*buf & 0x1f) == 0x01) {
+-    rtp_packet->header.markerbit = 1;
+-    rtp_encoder->timestamp += rtp_encoder->timestamp_increment;
+-  }
+-#if 0
+-  LOGI("markbit: %d, timestamp: %d, nalu type: %d", rtp_packet->header.markerbit, rtp_encoder->timestamp, buf[0] & 0x1f);
+-#endif
+-
+   memcpy(rtp_packet->payload, buf, size);
+   rtp_encoder->on_packet(rtp_encoder->buf, size + sizeof(RtpHeader), rtp_encoder->user_data);
+   return 0;
+ }
+
+-static int rtp_encoder_encode_h264_fu_a(RtpEncoder* rtp_encoder, uint8_t* buf, size_t size) {
++static int rtp_encoder_encode_h264_fu_a(RtpEncoder* rtp_encoder, uint8_t* buf,
++                                        size_t size, int marker) {
+   RtpPacket* rtp_packet = (RtpPacket*)rtp_encoder->buf;
+
+   rtp_packet->header.version = 2;
+@@ -86,11 +79,6 @@ static int rtp_encoder_encode_h264_fu_a(RtpEncoder* rtp_encoder, uint8_t* buf, s
+   buf = buf + 1;
+   size = size - 1;
+
+-  // increase timestamp if I, P frame
+-  if (type == 0x05 || type == 0x01) {
+-    rtp_encoder->timestamp += rtp_encoder->timestamp_increment;
+-  }
+-
+   NaluHeader* fu_indicator = (NaluHeader*)rtp_packet->payload;
+   FuHeader* fu_header = (FuHeader*)rtp_packet->payload + sizeof(NaluHeader);
+   fu_header->s = 1;
+@@ -105,7 +93,7 @@ static int rtp_encoder_encode_h264_fu_a(RtpEncoder* rtp_encoder, uint8_t* buf, s
+
+     if (size <= FU_PAYLOAD_SIZE) {
+       fu_header->e = 1;
+-      rtp_packet->header.markerbit = 1;
++      rtp_packet->header.markerbit = marker;
+       memcpy(rtp_packet->payload + sizeof(NaluHeader) + sizeof(FuHeader), buf, size);
+       rtp_encoder->on_packet(rtp_encoder->buf, size + sizeof(RtpHeader) + sizeof(NaluHeader) + sizeof(FuHeader), rtp_encoder->user_data);
+       break;
+@@ -150,14 +138,15 @@ static int rtp_encoder_encode_h264(RtpEncoder* rtp_encoder, uint8_t* buf, size_t
+     while (pstart[nalu_size - 1] == 0x00)
+       nalu_size--;
+
++    int marker = pend == buf_end;
+     if (nalu_size <= RTP_PAYLOAD_SIZE) {
+-      rtp_encoder_encode_h264_single(rtp_encoder, pstart, nalu_size);
++      rtp_encoder_encode_h264_single(rtp_encoder, pstart, nalu_size, marker);
+
+     } else {
+-      rtp_encoder_encode_h264_fu_a(rtp_encoder, pstart, nalu_size);
++      rtp_encoder_encode_h264_fu_a(rtp_encoder, pstart, nalu_size, marker);
+     }
+   }
+-
++  rtp_encoder->timestamp += rtp_encoder->timestamp_increment;
+   return 0;
+ }
+
+diff --git a/src/sdp.c b/src/sdp.c
+index b7661a4..88bedd9 100644
+--- a/src/sdp.c
++++ b/src/sdp.c
+@@ -26,16 +26,21 @@ void sdp_reset(char* sdp) {
+   memset(sdp, 0, CONFIG_SDP_BUFFER_SIZE);
+ }
+
+-void sdp_append_h264(char* sdp) {
+-  sdp_append(sdp, "m=video 9 UDP/TLS/RTP/SAVPF 96");
++void sdp_append_h264(char* sdp, uint8_t payload_type, uint32_t ssrc,
++                     const char* mid, const char* fmtp, int send_only) {
++  const char* selected_mid = mid != NULL && mid[0] != '\0' ? mid : "video";
++  const char* selected_fmtp = fmtp != NULL && fmtp[0] != '\0' ?
++                                  fmtp : "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f";
++  sdp_append(sdp, "m=video 9 UDP/TLS/RTP/SAVPF %u", payload_type);
+   sdp_append(sdp, "c=IN IP4 0.0.0.0");
+-  sdp_append(sdp, "a=rtcp-fb:96 nack");
+-  sdp_append(sdp, "a=rtcp-fb:96 nack pli");
+-  sdp_append(sdp, "a=fmtp:96 profile-level-id=42e01f;level-asymmetry-allowed=1");
+-  sdp_append(sdp, "a=rtpmap:96 H264/90000");
+-  sdp_append(sdp, "a=ssrc:1 cname:webrtc-h264");
+-  sdp_append(sdp, "a=sendrecv");
+-  sdp_append(sdp, "a=mid:video");
++  sdp_append(sdp, "a=rtcp-fb:%u nack pli", payload_type);
++  sdp_append(sdp, "a=fmtp:%u %s", payload_type, selected_fmtp);
++  sdp_append(sdp, "a=rtpmap:%u H264/90000", payload_type);
++  sdp_append(sdp, "a=ssrc:%u cname:lane-camera", ssrc);
++  sdp_append(sdp, "a=ssrc:%u msid:lane-stream lane-camera", ssrc);
++  sdp_append(sdp, "a=msid:lane-stream lane-camera");
++  sdp_append(sdp, send_only ? "a=sendonly" : "a=sendrecv");
++  sdp_append(sdp, "a=mid:%s", selected_mid);
+   sdp_append(sdp, "a=rtcp-mux");
+ }
+
+@@ -77,7 +82,8 @@ void sdp_append_datachannel(char* sdp) {
+   sdp_append(sdp, "a=max-message-size:262144");
+ }
+
+-void sdp_create(char* sdp, int b_video, int b_audio, int b_datachannel) {
++void sdp_create(char* sdp, int b_video, int b_audio, int b_datachannel,
++                const char* video_mid) {
+   char bundle[64];
+   sdp_append(sdp, "v=0");
+   sdp_append(sdp, "o=- 1495799811084970 1495799811084970 IN IP4 0.0.0.0");
+@@ -92,7 +98,8 @@ void sdp_create(char* sdp, int b_video, int b_audio, int b_datachannel) {
+   strcat(bundle, "a=group:BUNDLE");
+
+   if (b_video) {
+-    strcat(bundle, " video");
++    snprintf(bundle + strlen(bundle), sizeof(bundle) - strlen(bundle), " %s",
++             video_mid != NULL && video_mid[0] != '\0' ? video_mid : "video");
+   }
+
+   if (b_audio) {
+diff --git a/src/sdp.h b/src/sdp.h
+index ba85d71..1f1932c 100644
+--- a/src/sdp.h
++++ b/src/sdp.h
+@@ -1,6 +1,7 @@
+ #ifndef SDP_H_
+ #define SDP_H_
+
++#include <stdint.h>
+ #include <string.h>
+ #include "config.h"
+
+@@ -10,7 +11,8 @@
+ #define ICE_LITE 0
+ #endif
+
+-void sdp_append_h264(char* sdp);
++void sdp_append_h264(char* sdp, uint8_t payload_type, uint32_t ssrc,
++                     const char* mid, const char* fmtp, int send_only);
+
+ void sdp_append_pcma(char* sdp);
+
+@@ -20,7 +22,8 @@ void sdp_append_opus(char* sdp);
+
+ void sdp_append_datachannel(char* sdp);
+
+-void sdp_create(char* sdp, int b_video, int b_audio, int b_datachannel);
++void sdp_create(char* sdp, int b_video, int b_audio, int b_datachannel,
++                const char* video_mid);
+
+ int sdp_append(char* sdp, const char* format, ...);
+
+diff --git a/src/socket.c b/src/socket.c
+index 6f7d8ef..d617141 100644
+--- a/src/socket.c
++++ b/src/socket.c
+@@ -61,7 +61,8 @@ int udp_socket_open(UdpSocket* udp_socket, int family, int port) {
+   }
+
+   do {
+-    if ((ret = setsockopt(udp_socket->fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse))) < 0) {
++    /* Only mDNS shares its well-known port; ICE media ports must stay exclusive. */
++    if (port == 5353 && (ret = setsockopt(udp_socket->fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse))) < 0) {
+       LOGW("reuse failed. ignore");
+     }
+
+diff --git a/src/stun.c b/src/stun.c
+index d387241..0c2b233 100644
+--- a/src/stun.c
++++ b/src/stun.c
+@@ -149,6 +149,7 @@ void stun_parse_msg_buf(StunMessage* msg) {
+   } else if ((msg->stunmethod & STUN_METHOD_BINDING) == STUN_METHOD_BINDING) {
+     msg->stunmethod = STUN_METHOD_BINDING;
+   }
++  msg->use_candidate = 0;
+
+   while (pos < length) {
+     StunAttribute* attr = (StunAttribute*)(msg->buf + pos);
+@@ -201,7 +202,7 @@ void stun_parse_msg_buf(StunMessage* msg) {
+       case STUN_ATTR_TYPE_PRIORITY:
+         break;
+       case STUN_ATTR_TYPE_USE_CANDIDATE:
+-        // LOGD("Use Candidate");
++        msg->use_candidate = 1;
+         break;
+       case STUN_ATTR_TYPE_FINGERPRINT:
+         memcpy(&msg->fingerprint, attr->value, ntohs(attr->length));
+diff --git a/src/stun.h b/src/stun.h
+index 801133b..f2bcee3 100644
+--- a/src/stun.h
++++ b/src/stun.h
+@@ -85,6 +85,7 @@ struct StunAttribute {
+ struct StunMessage {
+   StunClass stunclass;
+   StunMethod stunmethod;
++  int use_candidate;
+   uint32_t fingerprint;
+   char message_integrity[20];
+   char username[128];
