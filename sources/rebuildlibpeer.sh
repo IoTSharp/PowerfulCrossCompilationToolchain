@@ -13,19 +13,11 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 
 pcct_setup_target x86
 
-if [ ! -f "$SCRIPT_DIR/libpeer-lanecamera.patch" ]; then
-    echo "missing LaneApp libpeer compatibility patch" >&2
-    exit 1
-fi
-
 libsrtp_root=$(mktemp -d)
 objects_root=$(mktemp -d)
 trap 'rm -rf "$libsrtp_root" "$objects_root"' EXIT INT TERM
 
 tar -xf "/dist/$LIBSRTP_ARCHIVE" -C "$libsrtp_root" --strip-components=1
-
-patch --dry-run --silent -p1 < "$SCRIPT_DIR/libpeer-lanecamera.patch"
-patch -p1 < "$SCRIPT_DIR/libpeer-lanecamera.patch"
 
 (
     cd "$libsrtp_root"

@@ -115,7 +115,6 @@ COPY sources/build-selected-deps.sh /work/build-selected-deps.sh
 COPY sources/dependency-versions.sh /work/dependency-versions.sh
 COPY sources/export-vaapi-runtime.sh /work/export-vaapi-runtime.sh
 COPY sources/lane2nd-lv_conf.h /work/lane2nd-lv_conf.h
-COPY sources/libpeer-lanecamera.patch /work/libpeer-lanecamera.patch
 COPY sources/rebuildffmpeg.sh /work/rebuildffmpeg.sh
 COPY sources/rebuildfreetype.sh /work/rebuildfreetype.sh
 COPY sources/rebuildlaneapp-lvgl.sh /work/rebuildlaneapp-lvgl.sh
