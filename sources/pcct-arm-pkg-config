@@ -1,0 +1,8 @@
+#!/bin/sh
+
+set -eu
+
+sysroot=${PCCT_ARM_SYSROOT:-/work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot}
+export PKG_CONFIG_LIBDIR="$sysroot/usr/lib/pkgconfig:$sysroot/usr/share/pkgconfig"
+unset PKG_CONFIG_PATH PKG_CONFIG_SYSROOT_DIR
+exec /usr/bin/pkg-config "$@"

@@ -37,7 +37,7 @@ services:
   arm:
     <<: *build-job
     image: ${PCCT_IMAGE_PREFIX:-ghcr.io/iotsharp}/pcct-build-arm:${PCCT_IMAGE_TAG:-latest}
-    platform: linux/386
+    platform: linux/amd64
 
   x64:
     <<: *build-job

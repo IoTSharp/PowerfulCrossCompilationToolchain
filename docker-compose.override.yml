@@ -15,6 +15,8 @@ services:
     build:
       context: .
       dockerfile: ./arm/Dockerfile
+      args:
+        PCCT_UBUNTU_MIRROR: ${PCCT_UBUNTU_MIRROR:-http://mirrors.aliyun.com/ubuntu}
 
   x64:
     build:

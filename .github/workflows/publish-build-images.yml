@@ -40,8 +40,8 @@ jobs:
             file: arm/Dockerfile
             image: ghcr.io/iotsharp/pcct-build-arm
             cache_scope: pcct-build-arm
-            container_platform: linux/386
-            build_args: ""
+            container_platform: linux/amd64
+            build_args: PCCT_UBUNTU_MIRROR=http://archive.ubuntu.com/ubuntu
           - name: x64
             file: x64/Dockerfile
             image: ghcr.io/iotsharp/pcct-build-x64

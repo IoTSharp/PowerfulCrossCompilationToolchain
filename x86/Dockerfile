@@ -146,7 +146,7 @@ RUN test -f /usr/lib/i386-linux-gnu/libz.a && \
         'Cflags: -I${includedir}' \
         > /usr/local/lib/pkgconfig/zlib.pc && \
     chmod +x /work/*.sh && \
-    /work/rebuildminigui.sh && \
+    /work/rebuildminigui.sh x86 && \
     /work/build-selected-deps.sh x86 \
         mbedtls curl libxml2 freetype sqlite libusb ffmpeg postgresql \
         libpeer laneapp-lvgl && \

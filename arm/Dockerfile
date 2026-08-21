@@ -1,4 +1,4 @@
-ARG BASE_PLATFORM=linux/386
+ARG BASE_PLATFORM=linux/amd64
 
 FROM debian:bookworm-slim AS fetcher
 
@@ -19,12 +19,15 @@ RUN chmod +x /work/*.sh && \
         https://github.com/postgres/postgres/archive/refs/tags/REL_17_2.tar.gz && \
     echo "PostgreSQL 17.2 fetched successfully"
 
-FROM --platform=${BASE_PLATFORM} i386/debian:wheezy
+FROM --platform=${BASE_PLATFORM} ubuntu:16.04
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+ARG PCCT_UBUNTU_MIRROR=http://mirrors.aliyun.com/ubuntu
+
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=Asia/Shanghai \
+    PCCT_ARM_SYSROOT=/work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot \
     CROSS_COMPILE=arm-none-linux-gnueabi- \
     SYSROOT=/work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot \
     CC=/work/toolchain_R2_EABI/usr/bin/arm-none-linux-gnueabi-gcc \
@@ -48,31 +51,29 @@ COPY sources/build-common.sh /work/build-common.sh
 COPY sources/build-selected-deps.sh /work/build-selected-deps.sh
 COPY sources/dependency-versions.sh /work/dependency-versions.sh
 COPY sources/lv_conf.h /work/lv_conf.h
+COPY sources/pcct-arm-gcc54-wrapper /usr/local/bin/pcct-arm-gcc54-wrapper
+COPY sources/pcct-arm-pkg-config /usr/local/bin/pcct-arm-pkg-config
 COPY sources/rebuildffmpeg.sh /work/rebuildffmpeg.sh
 COPY sources/rebuildfreetype.sh /work/rebuildfreetype.sh
 COPY sources/rebuildlibusb.sh /work/rebuildlibusb.sh
 COPY sources/rebuildlvgl.sh /work/rebuildlvgl.sh
+COPY sources/rebuildminigui.sh /work/rebuildminigui.sh
 COPY sources/rebuildsqlite.sh /work/rebuildsqlite.sh
 COPY sources/rebuildpostgresql.sh /work/rebuildpostgresql.sh
+COPY sources/verify-arm-gcc54.sh /work/verify-arm-gcc54.sh
 COPY --from=fetcher /dist/ /dist/
+COPY sources/minigui2.0.4-eb30dfdc.tar.gz /work/minigui2.0.4-eb30dfdc.tar.gz
 
-RUN printf '%s\n' \
+RUN sed -i \
+        -e "s|http://archive.ubuntu.com/ubuntu/|${PCCT_UBUNTU_MIRROR}/|g" \
+        -e "s|http://security.ubuntu.com/ubuntu/|${PCCT_UBUNTU_MIRROR}/|g" \
+        /etc/apt/sources.list && \
+    printf '%s\n' \
         'Acquire::Retries "5";' \
         'Acquire::http::Timeout "60";' \
         'Acquire::https::Timeout "60";' \
         'Acquire::http::Pipeline-Depth "0";' \
-        'Acquire::Check-Valid-Until "false";' \
-        'Acquire::AllowInsecureRepositories "true";' \
-        'APT::Get::AllowUnauthenticated "true";' \
-        > /etc/apt/apt.conf.d/99laneapp-legacy && \
-    printf '%s\n' \
-        'deb http://archive.debian.org/debian wheezy main' \
-        'deb http://archive.debian.org/debian wheezy contrib' \
-        'deb http://archive.debian.org/debian wheezy non-free' \
-        'deb http://archive.debian.org/debian-security wheezy/updates main' \
-        'deb http://archive.debian.org/debian-security wheezy/updates contrib' \
-        'deb http://archive.debian.org/debian-security wheezy/updates non-free' \
-        > /etc/apt/sources.list
+        > /etc/apt/apt.conf.d/99laneapp-network
 
 RUN set -e; \
     retry() { \
@@ -86,35 +87,39 @@ RUN set -e; \
         done; \
     }; \
     rm -rf /var/lib/apt/lists/* && \
-    retry apt-get -o Acquire::Check-Valid-Until=false -y --force-yes -q update && \
-    retry apt-get install -y --fix-missing --force-yes -q \
+    retry apt-get update && \
+    retry apt-get install -y --no-install-recommends --fix-missing \
         autoconf \
         automake \
         binutils \
+        binutils-arm-linux-gnueabi \
         build-essential \
-        busybox-static \
         ca-certificates \
         cmake \
         file \
         flex \
         bison \
+        g++-5-arm-linux-gnueabi \
+        gcc-5-arm-linux-gnueabi \
         libtool \
+        libtool-bin \
         m4 \
         make \
+        patch \
         perl \
         pkg-config \
         wget \
         xz-utils && \
-    retry apt-get install -y --fix-missing --force-yes -q \
+    retry apt-get install -y --no-install-recommends --fix-missing \
         libconfig-dev \
         libjpeg-dev \
         libpng12-dev \
         libpq-dev \
         libudev-dev \
         zlib1g-dev && \
-    retry apt-get install -y --fix-missing --force-yes -q \
+    retry apt-get install -y --no-install-recommends --fix-missing \
         libxml2-dev && \
-    retry apt-get install -y --fix-missing --force-yes -q \
+    retry apt-get install -y --no-install-recommends --fix-missing \
         libgtk2.0-dev \
         libvncserver-dev && \
     apt-get clean && \
@@ -126,6 +131,27 @@ RUN chmod +x /work/*.sh && \
     tar xzf ./toolchain_R2_EABI.tar.gz && \
     rm -f ./toolchain_R2_EABI.tar.gz ./toolchain.tar.gz*
 
+RUN set -e; \
+    chmod 755 /usr/local/bin/pcct-arm-gcc54-wrapper /usr/local/bin/pcct-arm-pkg-config; \
+    for entry in /work/toolchain_R2_EABI/usr/bin/*; do \
+        name=$(basename "$entry"); \
+        case "$name" in \
+            arm-none-linux-gnueabi-*|pkg-config) ;; \
+            *) \
+                if [ -f "$entry" ] || [ -L "$entry" ]; then rm -f "$entry"; fi; \
+                ;; \
+        esac; \
+    done; \
+    for tool in ar as cpp g++ gcc gfortran ld nm objcopy objdump ranlib strip; do \
+        rm -f "/work/toolchain_R2_EABI/usr/bin/arm-none-linux-gnueabi-$tool"; \
+        ln -s /usr/local/bin/pcct-arm-gcc54-wrapper "/work/toolchain_R2_EABI/usr/bin/arm-none-linux-gnueabi-$tool"; \
+    done; \
+    rm -f /work/toolchain_R2_EABI/usr/bin/pkg-config; \
+    ln -s /usr/local/bin/pcct-arm-pkg-config /work/toolchain_R2_EABI/usr/bin/pkg-config; \
+    arm-none-linux-gnueabi-gcc --version | head -n 1 | grep -q '5\.4\.0'; \
+    test "$(arm-none-linux-gnueabi-gcc -print-sysroot)" = "$PCCT_ARM_SYSROOT"; \
+    test -f "$(arm-none-linux-gnueabi-gcc -print-file-name=crt1.o)"
+
 RUN rm -rf \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/include/minigui \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/include/freetype2 \
@@ -136,16 +162,8 @@ RUN rm -rf \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/bin/freetype-config \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/include/lvgl.h \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/include/lv_conf.h \
-        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libmgext-2.0.so.4 \
-        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libmgext-2.0.so.4.0.0 \
-        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libmgext.a \
-        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libmgext.la \
-        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libmgext.so \
-        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libminigui-2.0.so.4 \
-        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libminigui-2.0.so.4.0.0 \
-        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libminigui.a \
-        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libminigui.la \
-        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libminigui.so \
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libmgext* \
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libminigui* \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libcurl* \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libfreetype* \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libsqlite3* \
@@ -165,9 +183,12 @@ RUN rm -rf \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/pkgconfig/libswscale.pc \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/pkgconfig/lvgl.pc
 
-RUN /work/build-selected-deps.sh arm freetype sqlite libusb curl ffmpeg lvgl postgresql && \
-    rm -rf /dist
+RUN /work/build-selected-deps.sh arm freetype && \
+    /work/rebuildminigui.sh arm && \
+    /work/build-selected-deps.sh arm sqlite libusb curl ffmpeg lvgl postgresql && \
+    /work/verify-arm-gcc54.sh && \
+    rm -rf /dist /tmp/pcct-*
 
-WORKDIR /LaneApp
+WORKDIR /tmp/LaneApp
 
 CMD ["bash"]

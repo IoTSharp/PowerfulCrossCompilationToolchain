@@ -1,0 +1,36 @@
+#!/bin/sh
+
+set -eu
+
+sysroot=${PCCT_ARM_SYSROOT:-/work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot}
+name=$(basename "$0")
+
+case "$name" in
+    arm-none-linux-gnueabi-gcc)
+        exec /usr/bin/arm-linux-gnueabi-gcc-5 \
+            --sysroot="$sysroot" -B"$sysroot/usr/lib/" \
+            "$@" -march=armv4t -mfloat-abi=soft \
+            -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+        ;;
+    arm-none-linux-gnueabi-g++)
+        exec /usr/bin/arm-linux-gnueabi-g++-5 \
+            --sysroot="$sysroot" -B"$sysroot/usr/lib/" \
+            "$@" -march=armv4t -mfloat-abi=soft \
+            -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+        ;;
+    arm-none-linux-gnueabi-cpp)
+        exec /usr/bin/arm-linux-gnueabi-cpp-5 \
+            --sysroot="$sysroot" "$@" -march=armv4t -mfloat-abi=soft \
+            -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+        ;;
+    arm-none-linux-gnueabi-gfortran)
+        exec /usr/bin/false "$@"
+        ;;
+    arm-none-linux-gnueabi-*)
+        tool=${name#arm-none-linux-gnueabi-}
+        exec "/usr/bin/arm-linux-gnueabi-$tool" "$@"
+        ;;
+esac
+
+echo "unsupported tool name: $name" >&2
+exit 2
