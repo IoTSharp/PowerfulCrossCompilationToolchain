@@ -32,7 +32,7 @@ English README: [README.md](README.md)
 - `docker-compose.yml` 是日常运行入口，默认从 GHCR 拉取预构建镜像。
 - `docker-compose.override.yml` 只保存本地 `build` 定义；执行 `docker compose up --build` 时，会在启动前按 override 中的配置本地构建镜像。
 - 通过环境变量 `BUILD_DIR` 指定要构建的宿主机目录，可选环境变量 `BUILD_COMMAND` 指定实际执行的构建命令，默认是 `make`。
-- 可选环境变量 `PCCT_IMAGE_PREFIX` 用于切换镜像前缀，默认值为 `ghcr.io/maikebing`；`PCCT_IMAGE_TAG` 默认为 `latest`。
+- 可选环境变量 `PCCT_IMAGE_PREFIX` 用于切换镜像前缀，默认值为 `ghcr.io/iotsharp`；`PCCT_IMAGE_TAG` 默认为 `latest`。
 - 为了避免每次手动设置环境变量，仓库根目录还提供了 `compose-up-all.cmd` 和 `compose-up-all.sh` 两个包装脚本。
 - 包装脚本默认工作模式是 `pull`，即只使用 `docker-compose.yml` 并从远端拉取镜像；传入 `--build` 或 `--mode build` 后，会自动叠加 `docker-compose.override.yml` 并执行本地镜像构建。
 - 包装脚本默认目标平台是 `all`，也可以通过 `--targets` 指定单个或多个平台，例如 `x64`、`arm64`、`x86,x64` 或 `x86 x64`。支持的平台名为 `x86legacy`、`x86`、`arm`、`x64`、`arm64`、`loongson`。

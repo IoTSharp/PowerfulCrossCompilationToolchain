@@ -32,7 +32,7 @@ Batch build with Docker Compose:
 - `docker-compose.yml` is the runtime entrypoint and pulls prebuilt images from GHCR by default.
 - `docker-compose.override.yml` only carries the local `build` definitions. When you run `docker compose up --build`, Compose uses the override and rebuilds the images locally before starting them.
 - Set `BUILD_DIR` to the host directory you want to build, and optionally set `BUILD_COMMAND` (defaults to `make`).
-- Optionally set `PCCT_IMAGE_PREFIX` (defaults to `ghcr.io/maikebing`) and `PCCT_IMAGE_TAG` (defaults to `latest`) to switch image registry/tag.
+- Optionally set `PCCT_IMAGE_PREFIX` (defaults to `ghcr.io/iotsharp`) and `PCCT_IMAGE_TAG` (defaults to `latest`) to switch image registry/tag.
 - The repo root also provides `compose-up-all.cmd` and `compose-up-all.sh` wrapper scripts so you do not have to export the environment variables manually each time.
 - The wrapper scripts default to `pull` mode, which only uses `docker-compose.yml` and pulls remote images. Pass `--build` or `--mode build` to add `docker-compose.override.yml` and rebuild the images locally.
 - The wrapper scripts default to the `all` target set. You can narrow the run with `--targets`, for example `x64`, `arm64`, `x86,x64`, or `x86 x64`. Supported targets are `x86legacy`, `x86`, `arm`, `x64`, `arm64`, and `loongson`.

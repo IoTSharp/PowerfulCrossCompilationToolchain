@@ -26,30 +26,30 @@ x-build-job: &build-job
 services:
   x86legacy:
     <<: *build-job
-    image: ${PCCT_IMAGE_PREFIX:-ghcr.io/maikebing}/pcct-build-x86-legacy:${PCCT_IMAGE_TAG:-latest}
+    image: ${PCCT_IMAGE_PREFIX:-ghcr.io/iotsharp}/pcct-build-x86-legacy:${PCCT_IMAGE_TAG:-latest}
     platform: linux/386
 
   x86:
     <<: *build-job
-    image: ${PCCT_IMAGE_PREFIX:-ghcr.io/maikebing}/pcct-build-x86:${PCCT_IMAGE_TAG:-latest}
+    image: ${PCCT_IMAGE_PREFIX:-ghcr.io/iotsharp}/pcct-build-x86:${PCCT_IMAGE_TAG:-latest}
     platform: linux/386
 
   arm:
     <<: *build-job
-    image: ${PCCT_IMAGE_PREFIX:-ghcr.io/maikebing}/pcct-build-arm:${PCCT_IMAGE_TAG:-latest}
+    image: ${PCCT_IMAGE_PREFIX:-ghcr.io/iotsharp}/pcct-build-arm:${PCCT_IMAGE_TAG:-latest}
     platform: linux/386
 
   x64:
     <<: *build-job
-    image: ${PCCT_IMAGE_PREFIX:-ghcr.io/maikebing}/pcct-build-x64:${PCCT_IMAGE_TAG:-latest}
+    image: ${PCCT_IMAGE_PREFIX:-ghcr.io/iotsharp}/pcct-build-x64:${PCCT_IMAGE_TAG:-latest}
     platform: linux/amd64
 
   arm64:
     <<: *build-job
-    image: ${PCCT_IMAGE_PREFIX:-ghcr.io/maikebing}/pcct-build-arm64:${PCCT_IMAGE_TAG:-latest}
+    image: ${PCCT_IMAGE_PREFIX:-ghcr.io/iotsharp}/pcct-build-arm64:${PCCT_IMAGE_TAG:-latest}
     platform: linux/amd64
 
   loongson:
     <<: *build-job
-    image: ${PCCT_IMAGE_PREFIX:-ghcr.io/maikebing}/pcct-build-loongson:${PCCT_IMAGE_TAG:-latest}
+    image: ${PCCT_IMAGE_PREFIX:-ghcr.io/iotsharp}/pcct-build-loongson:${PCCT_IMAGE_TAG:-latest}
     platform: linux/amd64

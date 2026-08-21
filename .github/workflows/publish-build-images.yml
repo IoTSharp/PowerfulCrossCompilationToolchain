@@ -26,37 +26,37 @@ jobs:
         include:
           - name: x86Legacy
             file: x86Legacy/Dockerfile
-            image: ghcr.io/${{ github.repository_owner }}/pcct-build-x86-legacy
+            image: ghcr.io/iotsharp/pcct-build-x86-legacy
             cache_scope: pcct-build-x86-legacy
             container_platform: linux/386
             build_args: ""
           - name: x86
             file: x86/Dockerfile
-            image: ghcr.io/${{ github.repository_owner }}/pcct-build-x86
+            image: ghcr.io/iotsharp/pcct-build-x86
             cache_scope: pcct-build-x86
             container_platform: linux/386
             build_args: PCCT_UBUNTU_MIRROR=http://archive.ubuntu.com/ubuntu
           - name: arm
             file: arm/Dockerfile
-            image: ghcr.io/${{ github.repository_owner }}/pcct-build-arm
+            image: ghcr.io/iotsharp/pcct-build-arm
             cache_scope: pcct-build-arm
             container_platform: linux/386
             build_args: ""
           - name: x64
             file: x64/Dockerfile
-            image: ghcr.io/${{ github.repository_owner }}/pcct-build-x64
+            image: ghcr.io/iotsharp/pcct-build-x64
             cache_scope: pcct-build-x64
             container_platform: linux/amd64
             build_args: PCCT_USE_TUNA_MIRROR=0
           - name: arm64
             file: arm64/Dockerfile
-            image: ghcr.io/${{ github.repository_owner }}/pcct-build-arm64
+            image: ghcr.io/iotsharp/pcct-build-arm64
             cache_scope: pcct-build-arm64
             container_platform: linux/amd64
             build_args: PCCT_USE_TUNA_MIRROR=0
           - name: loongson
             file: loongson/Dockerfile
-            image: ghcr.io/${{ github.repository_owner }}/pcct-build-loongson
+            image: ghcr.io/iotsharp/pcct-build-loongson
             cache_scope: pcct-build-loongson
             container_platform: linux/amd64
             build_args: PCCT_USE_TUNA_MIRROR=0
