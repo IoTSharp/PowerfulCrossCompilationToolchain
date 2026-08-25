@@ -1,0 +1,144 @@
+#!/bin/sh
+
+set -eu
+
+if [ "$#" -ne 1 ] || [ "$1" != "x86" ]; then
+    echo "usage: $0 x86" >&2
+    exit 1
+fi
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+. "$SCRIPT_DIR/build-common.sh"
+. "$SCRIPT_DIR/dependency-versions.sh"
+
+pcct_setup_target x86
+
+# The LaneApp extension keeps upstream file loading intact while adding a
+# separate embedded:// resolver and C entry point for the static profile.
+# HyperLPR stores this one source file with CRLF; normalize the extracted copy
+# so GNU patch applies the pinned mixed-file patch consistently on Xenial.
+sed -i 's/\r$//' cpp/src/inference_helper_module/inference_helper_mnn.cpp
+patch -p1 < "$SCRIPT_DIR/patches/hyperlpr3-embedded-models.patch"
+
+model_dir="resource/models/r2_mobile"
+model_manifest="$(mktemp)"
+build_dir="$(mktemp -d)"
+trap 'rm -rf "$model_manifest" "$build_dir"' EXIT INT TERM
+
+cat > "$model_manifest" <<'EOF'
+93BECA2566CCC8AD7FB5E5CE1BD87D158C3F1B2A6B48C1380366ABCF9F2C6F66  b320_backbone_h.mnn
+B2B5C4126AAAD2C80901DDB8693005D73BC9856A80803DAE9C7D598033273841  b320_header_h.mnn
+954D1592AF55297F12CD82847365C47DBE5CC5A07AFF54AACF8F49A91784BF37  b640x_backbone_h.mnn
+AB946655FDBD0F9F8EE4EFA51AD3765F8FE757B12CE658D6944D3FB1DF7EACEA  b640x_head_h.mnn
+0BBF5AEEE7E4D36BE2B545CADE9C025D70E0D0A2465DD701238EEA617C9EADB8  litemodel_cls_96xh.mnn
+DAA9ED4E674EDED73FF51BFCA528ACEC35EDBBB63A500BE65C49F74E5739E043  rpv3_mdict_160h.mnn
+EOF
+
+(
+    cd "$model_dir"
+    sha256sum -c "$model_manifest"
+)
+
+# Build the bounded upstream source set manually so HyperLPR's normal CMake
+# path cannot invoke FetchContent or produce a shared object.
+object_index=0
+for source_file in $(find cpp/src -type f -name '*.cpp' | sort); do
+    object_index=$((object_index + 1))
+    "$CXX" \
+        -std=c++11 \
+        -O2 \
+        -fPIC \
+        -DINFERENCE_HELPER_ENABLE_MNN \
+        -Icpp/src \
+        -Icpp/c_api \
+        -Icpp/platform \
+        -I"$PCCT_INCLUDEDIR" \
+        -I"$PCCT_INCLUDEDIR/opencv4" \
+        -c "$source_file" \
+        -o "$build_dir/source-$object_index.o"
+done
+
+for source_file in $(find cpp/c_api -type f \( -name '*.cc' -o -name '*.cpp' \) | sort); do
+    object_index=$((object_index + 1))
+    "$CXX" \
+        -std=c++11 \
+        -O2 \
+        -fPIC \
+        -DINFERENCE_HELPER_ENABLE_MNN \
+        -Icpp/src \
+        -Icpp/c_api \
+        -Icpp/platform \
+        -I"$PCCT_INCLUDEDIR" \
+        -I"$PCCT_INCLUDEDIR/opencv4" \
+        -c "$source_file" \
+        -o "$build_dir/capi-$object_index.o"
+done
+
+# GNU binary objects keep model bytes in the ELF archive. Rename the generated
+# data section to read-only storage before archiving it with HyperLPR.
+(
+    cd "$model_dir"
+    for model_file in \
+        b320_backbone_h.mnn \
+        b320_header_h.mnn \
+        b640x_backbone_h.mnn \
+        b640x_head_h.mnn \
+        litemodel_cls_96xh.mnn \
+        rpv3_mdict_160h.mnn; do
+        model_name=${model_file%.mnn}
+        "$LD" -r -b binary "$model_file" -o "$build_dir/model-$model_name.o"
+        "$OBJCOPY" \
+            --rename-section .data=.rodata,alloc,load,readonly,data,contents \
+            "$build_dir/model-$model_name.o"
+        file "$build_dir/model-$model_name.o" | grep -q 'ELF 32-bit.*Intel 80386'
+    done
+)
+
+"$AR" rcs "$build_dir/libhyperlpr3.a" "$build_dir"/*.o
+"$RANLIB" "$build_dir/libhyperlpr3.a"
+
+mkdir -p "$PCCT_LIBDIR" "$PCCT_INCLUDEDIR" "$PCCT_PKGCONFIGDIR"
+install -m 0644 "$build_dir/libhyperlpr3.a" "$PCCT_LIBDIR/libhyperlpr3.a"
+install -m 0644 cpp/c_api/hyper_lpr_sdk.h "$PCCT_INCLUDEDIR/hyper_lpr_sdk.h"
+install -m 0644 cpp/c_api/hyper_lpr_sdk_memory.h "$PCCT_INCLUDEDIR/hyper_lpr_sdk_memory.h"
+
+cat > "$PCCT_PKGCONFIGDIR/laneapp-hyperlpr3.pc" <<EOF
+prefix=$PCCT_PREFIX
+includedir=\${prefix}/include
+libdir=\${prefix}/lib
+
+Name: laneapp-hyperlpr3
+Description: LaneApp X86 static HyperLPR3 profile with embedded MNN models
+Version: $HYPERLPR_VERSION
+Cflags: -I\${includedir}
+Libs: -L\${libdir} -lhyperlpr3
+Libs.private: -Wl,--whole-archive -lMNN -Wl,--no-whole-archive -lopencv_imgproc -lopencv_core -l:libz.a -pthread -ldl -lm -lrt
+EOF
+
+license_dir="$PCCT_PREFIX/share/licenses/laneapp-hyperlpr3"
+mkdir -p "$license_dir"
+install -m 0644 LICENSE "$license_dir/HyperLPR-LICENSE"
+install -m 0644 "$model_manifest" "$license_dir/MODEL-SHA256SUMS"
+cat > "$license_dir/NOTICE.txt" <<EOF
+LaneApp X86 HyperLPR3 static profile
+
+HyperLPR source: szad670401/HyperLPR
+HyperLPR revision: $HYPERLPR_REVISION
+HyperLPR packaged version: $HYPERLPR_VERSION
+HyperLPR license: Apache-2.0 (HyperLPR-LICENSE)
+
+MNN source: alibaba/MNN tag $MNN_VERSION
+MNN license: Apache-2.0 (/usr/local/share/licenses/MNN-$MNN_VERSION/LICENSE.txt)
+
+OpenCV source: opencv/opencv tag $OPENCV_VERSION
+OpenCV license: BSD-3-Clause (/usr/local/share/licenses/opencv-$OPENCV_VERSION/LICENSE)
+
+The six HyperLPR model files are embedded as read-only ELF objects in
+libhyperlpr3.a. Their pinned hashes are recorded in MODEL-SHA256SUMS. No model
+file is required at LaneApp runtime.
+EOF
+
+test -f "$PCCT_LIBDIR/libhyperlpr3.a"
+test -f "$PCCT_PKGCONFIGDIR/laneapp-hyperlpr3.pc"
+nm "$PCCT_LIBDIR/libhyperlpr3.a" | grep -q 'HLPR_CreateContextFromEmbeddedModels'
+nm "$PCCT_LIBDIR/libhyperlpr3.a" | grep -q '_binary_rpv3_mdict_160h_mnn_start'

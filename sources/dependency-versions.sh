@@ -47,6 +47,33 @@ FFMPEG_ARCHIVE="ffmpeg-${FFMPEG_TAG}.tar.gz"
 FFMPEG_URL="https://github.com/FFmpeg/FFmpeg/archive/refs/tags/${FFMPEG_TAG}.tar.gz"
 FFMPEG_SHA256="36D12B77917CEF669484C39FE9ECEA6FEDC26D0F12A5B01C154BCC64AFF86019"
 
+# LaneApp HyperLPR3 is intentionally X86-only. These revisions are kept in
+# the shared manifest so the image build fetches once and LaneApp stays offline.
+CMAKE_VERSION=3.14.7
+CMAKE_ARCHIVE="cmake-${CMAKE_VERSION}.tar.gz"
+CMAKE_URL="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/${CMAKE_ARCHIVE}"
+CMAKE_SHA256="9221993E0AF3E6D10124D840FF24F5B2F3B884416FCA04D3312CB0388DEC1385"
+
+OPENCV_VERSION=4.5.1
+OPENCV_ARCHIVE="opencv-${OPENCV_VERSION}.tar.gz"
+OPENCV_URL="https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.tar.gz"
+OPENCV_SHA256="E27FE5B168918AB60D58D7ACE2BD82DD14A4D0BD1D3AE182952C2113F5637513"
+
+MNN_VERSION=2.2.0
+MNN_ARCHIVE="mnn-${MNN_VERSION}.tar.gz"
+MNN_URL="https://github.com/alibaba/MNN/archive/refs/tags/${MNN_VERSION}.tar.gz"
+MNN_SHA256="0FD4EF9EA65128DC9964045FA6359107054BF471460D0B581B75565BA193D084"
+MNN_LICENSE_REVISION=cda4a6f441b8ed58cc5c6f389359e5851e9d6322
+MNN_LICENSE_ARCHIVE="mnn-license-${MNN_LICENSE_REVISION}.txt"
+MNN_LICENSE_URL="https://raw.githubusercontent.com/alibaba/MNN/${MNN_LICENSE_REVISION}/LICENSE.txt"
+MNN_LICENSE_SHA256="A830D59C4F98D110E0540D0581EFADA06192BA6E798434307D1794B07A290302"
+
+HYPERLPR_VERSION=3.0.1.9307450
+HYPERLPR_REVISION=9307450f7b7915be18f23a539ec05b41fe6629f4
+HYPERLPR_ARCHIVE="hyperlpr-${HYPERLPR_REVISION}.tar.gz"
+HYPERLPR_URL="https://github.com/szad670401/HyperLPR/archive/${HYPERLPR_REVISION}.tar.gz"
+HYPERLPR_SHA256="40FE119E652AC0241A27F6CF868A11773E9E19777B0A6A63F594C78F46D77F68"
+
 LVGL_VERSION=9.5.0
 LVGL_TAG=v9.5.0
 LVGL_ARCHIVE="lvgl-${LVGL_TAG}.tar.gz"
@@ -90,6 +117,11 @@ pcct_dep_archive() {
         libusb) echo "$LIBUSB_ARCHIVE" ;;
         sqlite) echo "$SQLITE_ARCHIVE" ;;
         ffmpeg) echo "$FFMPEG_ARCHIVE" ;;
+        cmake) echo "$CMAKE_ARCHIVE" ;;
+        opencv) echo "$OPENCV_ARCHIVE" ;;
+        mnn) echo "$MNN_ARCHIVE" ;;
+        mnn-license) echo "$MNN_LICENSE_ARCHIVE" ;;
+        hyperlpr) echo "$HYPERLPR_ARCHIVE" ;;
         lvgl) echo "$LVGL_ARCHIVE" ;;
         laneapp-lvgl) echo "$LANEAPP_LVGL_ARCHIVE" ;;
         libpeer) echo "$LIBPEER_ARCHIVE" ;;
@@ -112,6 +144,11 @@ pcct_dep_url() {
         libusb) echo "$LIBUSB_URL" ;;
         sqlite) echo "$SQLITE_URL" ;;
         ffmpeg) echo "$FFMPEG_URL" ;;
+        cmake) echo "$CMAKE_URL" ;;
+        opencv) echo "$OPENCV_URL" ;;
+        mnn) echo "$MNN_URL" ;;
+        mnn-license) echo "$MNN_LICENSE_URL" ;;
+        hyperlpr) echo "$HYPERLPR_URL" ;;
         lvgl) echo "$LVGL_URL" ;;
         laneapp-lvgl) echo "$LANEAPP_LVGL_URL" ;;
         libpeer) echo "$LIBPEER_URL" ;;
@@ -134,6 +171,11 @@ pcct_dep_sha256() {
         libusb) echo "$LIBUSB_SHA256" ;;
         sqlite) echo "$SQLITE_SHA256" ;;
         ffmpeg) echo "$FFMPEG_SHA256" ;;
+        cmake) echo "$CMAKE_SHA256" ;;
+        opencv) echo "$OPENCV_SHA256" ;;
+        mnn) echo "$MNN_SHA256" ;;
+        mnn-license) echo "$MNN_LICENSE_SHA256" ;;
+        hyperlpr) echo "$HYPERLPR_SHA256" ;;
         lvgl) echo "$LVGL_SHA256" ;;
         laneapp-lvgl) echo "$LANEAPP_LVGL_SHA256" ;;
         libpeer) echo "$LIBPEER_SHA256" ;;
@@ -156,6 +198,11 @@ pcct_dep_version() {
         libusb) echo "$LIBUSB_VERSION" ;;
         sqlite) echo "$SQLITE_VERSION" ;;
         ffmpeg) echo "$FFMPEG_VERSION" ;;
+        cmake) echo "$CMAKE_VERSION" ;;
+        opencv) echo "$OPENCV_VERSION" ;;
+        mnn) echo "$MNN_VERSION" ;;
+        mnn-license) echo "$MNN_LICENSE_REVISION" ;;
+        hyperlpr) echo "$HYPERLPR_VERSION" ;;
         lvgl) echo "$LVGL_VERSION" ;;
         laneapp-lvgl) echo "$LANEAPP_LVGL_VERSION" ;;
         libpeer) echo "$LIBPEER_VERSION" ;;

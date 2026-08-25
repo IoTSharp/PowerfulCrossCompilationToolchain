@@ -24,6 +24,8 @@ English README: [README.md](README.md)
 - 独立 X86 镜像从固定源码归档构建 LaneApp 依赖，把静态库、头文件和 `pkg-config` 元数据安装到 `/usr/local`。原来 LaneApp 私有的 FFmpeg/VAAPI 构建链也迁入该镜像，因此以后只修改 LaneApp 代码时不再重新编译这些第三方库，LaneApp 也不再保留 FFmpeg 子模块。
 - X86 curl 保留 HTTPS，并与 libpeer、libsrtp、FFmpeg 统一使用 mbedTLS 3.4.0；IPv6 关闭。OpenSSL 1.1.1w 只保留为可选源码构建配置，不进入默认 X86 镜像，避免同一 LaneApp 进程同时引入两套 TLS 实现。
 - X86 FFmpeg 启用 H.264 VAAPI，并使用 Xenial 的 libva/libdrm。FFmpeg 本身静态链接，面向硬件的 i965 驱动及其固定的 32 位 libva/libdrm 运行时输出到 `/opt/pcct/runtime/vaapi`，供 LaneApp 打包。
+- 仅 X86 的 LaneApp 车牌识别配置固定使用 CMake `3.14.7`、OpenCV `4.5.1`、MNN `2.2.0` 和 HyperLPR 提交 `9307450f7b7915be18f23a539ec05b41fe6629f4`（包版本 `3.0.1.9307450`）。OpenCV 只保留静态 `core`、`imgproc`，MNN 只保留单线程 CPU 静态推理；HyperLPR 和 6 个已校验模型全部放入 `libhyperlpr3.a`。LaneApp 通过 `laneapp-hyperlpr3.pc` 离线链接，不增加识别运行时共享库或模型文件。
+- 识别依赖许可证和模型哈希记录安装在 `/usr/local/share/licenses/laneapp-hyperlpr3`，MNN、OpenCV 的许可证位于相邻版本目录；受控 HyperLPR 内存模型补丁维护在 `sources/patches/hyperlpr3-embedded-models.patch`。`sources/patches/mnn-2.2.0-i386-simd.patch` 在 i386 上保留 SSE4.1/AVX2/FMA C++ 运行时分派，同时排除 MNN 仅适用于 x86_64 的 AVX 汇编。
 - X86 镜像构建时会把 curl、libxml2、FFmpeg、libpeer/libsrtp、mbedTLS、libpq、libusb 和 LaneApp LVGL 配置链接到同一个静态验证程序；最终只允许系统基线库以及明确随包携带的 VAAPI/libdrm 运行时保持动态链接。
 - `x86Legacy`、`x86` 和 `arm` 都分别从仓库内固定的 MiniGUI 2.0.4 源码归档构建，不从其他镜像或遗留 ARM sysroot 复用 MiniGUI 构建产物。
 

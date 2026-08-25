@@ -1,0 +1,242 @@
+diff --git a/cpp/c_api/hyper_lpr_sdk_memory.cc b/cpp/c_api/hyper_lpr_sdk_memory.cc
+new file mode 100644
+index 0000000..3155662
+--- /dev/null
++++ b/cpp/c_api/hyper_lpr_sdk_memory.cc
+@@ -0,0 +1,13 @@
++#include "hyper_lpr_sdk_memory.h"
++
++P_HLPR_Context HLPR_CreateContextFromEmbeddedModels(
++        P_HLPR_ContextConfiguration configuration) {
++    P_HLPR_Context context = nullptr;
++    if (configuration != nullptr) {
++        static char embedded_models_path[] = "embedded://";
++        HLPR_ContextConfiguration embedded_configuration = *configuration;
++        embedded_configuration.models_path = embedded_models_path;
++        context = HLPR_CreateContext(&embedded_configuration);
++    }
++    return context;
++}
+diff --git a/cpp/c_api/hyper_lpr_sdk_memory.h b/cpp/c_api/hyper_lpr_sdk_memory.h
+new file mode 100644
+index 0000000..69bbed9
+--- /dev/null
++++ b/cpp/c_api/hyper_lpr_sdk_memory.h
+@@ -0,0 +1,17 @@
++#ifndef HYPER_LPR_SDK_MEMORY_H
++#define HYPER_LPR_SDK_MEMORY_H
++
++#include "hyper_lpr_sdk.h"
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++HYPER_CAPI_EXPORT extern P_HLPR_Context HLPR_CreateContextFromEmbeddedModels(
++        P_HLPR_ContextConfiguration configuration);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif
+diff --git a/cpp/src/context_module/hyper_lpr_context.cpp b/cpp/src/context_module/hyper_lpr_context.cpp
+index a1d7b5e..7795d49 100644
+--- a/cpp/src/context_module/hyper_lpr_context.cpp
++++ b/cpp/src/context_module/hyper_lpr_context.cpp
+@@ -11,6 +11,14 @@
+ 
+ namespace hyper {
+ 
++static std::string BuildModelPath(const std::string& models_folder_path,
++                                  const std::string& model_filename) {
++    if (models_folder_path == "embedded://") {
++        return models_folder_path + model_filename;
++    }
++    return models_folder_path + "/" + model_filename;
++}
++
+ HyperLPRContext::HyperLPRContext() = default;
+ 
+ void HyperLPRContext::operator()(CameraBuffer &buffer) {
+@@ -125,25 +133,26 @@ void HyperLPRContext::operator()(CameraBuffer &buffer) {
+ int32_t HyperLPRContext::Initialize(const std::string& models_folder_path, int max_num, DetectLevel detect_level,
+                                  int threads, bool use_half, float box_conf_threshold, float nms_threshold, float rec_confidence_threshold) {
+     int32_t ret;
+-    std::string det_backbone_model = models_folder_path + "/" + hyper::DETECT_LOW_BACKBONE_FILENAME;
+-    if (!exists(det_backbone_model)) {
++    const bool embedded_models = models_folder_path == "embedded://";
++    std::string det_backbone_model = BuildModelPath(models_folder_path, hyper::DETECT_LOW_BACKBONE_FILENAME);
++    if (!embedded_models && !exists(det_backbone_model)) {
+         LOGE("file: %s does not exist.", hyper::DETECT_LOW_BACKBONE_FILENAME.c_str());
+         return hRetErr;
+     }
+-    std::string det_header_model = models_folder_path + "/" + hyper::DETECT_LOW_HEAD_FILENAME;
+-    if (!exists(det_header_model)) {
++    std::string det_header_model = BuildModelPath(models_folder_path, hyper::DETECT_LOW_HEAD_FILENAME);
++    if (!embedded_models && !exists(det_header_model)) {
+         LOGE("file: %s does not exist.", hyper::DETECT_LOW_HEAD_FILENAME.c_str());
+         return hRetErr;
+     }
+     if (detect_level == DETECT_LEVEL_HIGH) {
+-        det_backbone_model = models_folder_path + "/" + hyper::DETECT_HIGH_BACKBONE_FILENAME;
+-        if (!exists(det_backbone_model)) {
++        det_backbone_model = BuildModelPath(models_folder_path, hyper::DETECT_HIGH_BACKBONE_FILENAME);
++        if (!embedded_models && !exists(det_backbone_model)) {
+             LOGE("file: %s does not exist.", hyper::DETECT_HIGH_BACKBONE_FILENAME.c_str());
+             return hRetErr;
+         }
+-        det_header_model = models_folder_path + "/" + hyper::DETECT_HIGH_HEAD_FILENAME;
+-        if (!exists(det_header_model)) {
++        det_header_model = BuildModelPath(models_folder_path, hyper::DETECT_HIGH_HEAD_FILENAME);
++        if (!embedded_models && !exists(det_header_model)) {
+             LOGE("file: %s does not exist.", hyper::DETECT_HIGH_HEAD_FILENAME.c_str());
+             return hRetErr;
+         }
+         m_pre_image_size_ = 640;
+@@ -160,8 +169,8 @@ int32_t HyperLPRContext::Initialize(const std::string& models_folder_path, int m
+         return hRetErr;
+     }
+     // init classification
+-    std::string classification_model = models_folder_path + "/" + hyper::CLS_MODEL_FILENAME;
+-    if (!exists(classification_model)) {
++    std::string classification_model = BuildModelPath(models_folder_path, hyper::CLS_MODEL_FILENAME);
++    if (!embedded_models && !exists(classification_model)) {
+         LOGE("file: %s does not exist.", hyper::CLS_MODEL_FILENAME.c_str());
+         return hRetErr;
+     }
+@@ -172,8 +181,8 @@ int32_t HyperLPRContext::Initialize(const std::string& models_folder_path, int m
+         return hRetErr;
+     }
+     // init recognition
+-    std::string recognition_model = models_folder_path + "/" + hyper::REC_MODEL_FILENAME;
+-    if (!exists(recognition_model)) {
++    std::string recognition_model = BuildModelPath(models_folder_path, hyper::REC_MODEL_FILENAME);
++    if (!embedded_models && !exists(recognition_model)) {
+         LOGE("file: %s does not exist.", hyper::REC_MODEL_FILENAME.c_str());
+         return hRetErr;
+     }
+diff --git a/cpp/src/embedded_model.cpp b/cpp/src/embedded_model.cpp
+new file mode 100644
+index 0000000..591bf2d
+--- /dev/null
++++ b/cpp/src/embedded_model.cpp
+@@ -0,0 +1,70 @@
++#include "embedded_model.h"
++
++#include <climits>
++#include <cstddef>
++#include <cstring>
++
++extern "C" {
++extern const unsigned char _binary_b320_backbone_h_mnn_start[];
++extern const unsigned char _binary_b320_backbone_h_mnn_end[];
++extern const unsigned char _binary_b320_header_h_mnn_start[];
++extern const unsigned char _binary_b320_header_h_mnn_end[];
++extern const unsigned char _binary_b640x_backbone_h_mnn_start[];
++extern const unsigned char _binary_b640x_backbone_h_mnn_end[];
++extern const unsigned char _binary_b640x_head_h_mnn_start[];
++extern const unsigned char _binary_b640x_head_h_mnn_end[];
++extern const unsigned char _binary_litemodel_cls_96xh_mnn_start[];
++extern const unsigned char _binary_litemodel_cls_96xh_mnn_end[];
++extern const unsigned char _binary_rpv3_mdict_160h_mnn_start[];
++extern const unsigned char _binary_rpv3_mdict_160h_mnn_end[];
++}
++
++namespace hyper {
++namespace {
++
++struct EmbeddedModel {
++    const char* name;
++    const unsigned char* begin;
++    const unsigned char* end;
++};
++
++const EmbeddedModel kEmbeddedModels[] = {
++    {"b320_backbone_h.mnn", _binary_b320_backbone_h_mnn_start,
++     _binary_b320_backbone_h_mnn_end},
++    {"b320_header_h.mnn", _binary_b320_header_h_mnn_start,
++     _binary_b320_header_h_mnn_end},
++    {"b640x_backbone_h.mnn", _binary_b640x_backbone_h_mnn_start,
++     _binary_b640x_backbone_h_mnn_end},
++    {"b640x_head_h.mnn", _binary_b640x_head_h_mnn_start,
++     _binary_b640x_head_h_mnn_end},
++    {"litemodel_cls_96xh.mnn", _binary_litemodel_cls_96xh_mnn_start,
++     _binary_litemodel_cls_96xh_mnn_end},
++    {"rpv3_mdict_160h.mnn", _binary_rpv3_mdict_160h_mnn_start,
++     _binary_rpv3_mdict_160h_mnn_end},
++};
++
++}  // namespace
++
++bool ResolveEmbeddedModel(const std::string& model_uri,
++                          const unsigned char** model_data,
++                          int* model_size) {
++    static const char kEmbeddedPrefix[] = "embedded://";
++    bool resolved = false;
++    if (model_data != nullptr && model_size != nullptr &&
++        model_uri.compare(0, sizeof(kEmbeddedPrefix) - 1U,
++                          kEmbeddedPrefix) == 0) {
++        const char* model_name = model_uri.c_str() + sizeof(kEmbeddedPrefix) - 1U;
++        for (const EmbeddedModel& model : kEmbeddedModels) {
++            const ptrdiff_t size = model.end - model.begin;
++            if (!resolved && std::strcmp(model.name, model_name) == 0 &&
++                size > 0 && size <= INT_MAX) {
++                *model_data = model.begin;
++                *model_size = static_cast<int>(size);
++                resolved = true;
++            }
++        }
++    }
++    return resolved;
++}
++
++}  // namespace hyper
+diff --git a/cpp/src/embedded_model.h b/cpp/src/embedded_model.h
+new file mode 100644
+index 0000000..1bf15b2
+--- /dev/null
++++ b/cpp/src/embedded_model.h
+@@ -0,0 +1,14 @@
++#ifndef HYPERLPR3_EMBEDDED_MODEL_H
++#define HYPERLPR3_EMBEDDED_MODEL_H
++
++#include <string>
++
++namespace hyper {
++
++bool ResolveEmbeddedModel(const std::string& model_uri,
++                          const unsigned char** model_data,
++                          int* model_size);
++
++}  // namespace hyper
++
++#endif
+diff --git a/cpp/src/inference_helper_module/inference_helper_mnn.cpp b/cpp/src/inference_helper_module/inference_helper_mnn.cpp
+index af31ca5..70fa78e 100644
+--- a/cpp/src/inference_helper_module/inference_helper_mnn.cpp
++++ b/cpp/src/inference_helper_module/inference_helper_mnn.cpp
+@@ -31,6 +31,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
+ 
+ /* for My modules */
+ #include "inference_helper_log.h"
++#include "embedded_model.h"
+ #include "inference_helper_mnn.h"
+ 
+ /*** Macro ***/
+@@ -168,6 +169,15 @@ int32_t InferenceHelperMnn::Initialize(char* model_buffer, int model_size, std::
+ 
+ int32_t InferenceHelperMnn::Initialize(const std::string& model_filename, std::vector<InputTensorInfo>& input_tensor_info_list, std::vector<OutputTensorInfo>& output_tensor_info_list)
+ {
++    const unsigned char* embedded_data = nullptr;
++    int embedded_size = 0;
++    if (hyper::ResolveEmbeddedModel(model_filename, &embedded_data,
++                                    &embedded_size)) {
++        return Initialize(reinterpret_cast<char*>(
++                                  const_cast<unsigned char*>(embedded_data)),
++                          embedded_size, input_tensor_info_list,
++                          output_tensor_info_list);
++    }
+     /*** Create network ***/
+     net_.reset(MNN::Interpreter::createFromFile(model_filename.c_str()));
+     if (!net_) {

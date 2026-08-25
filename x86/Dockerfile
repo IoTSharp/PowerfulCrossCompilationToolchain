@@ -17,7 +17,8 @@ RUN apt-get update && \
 RUN chmod +x /work/*.sh && \
     /work/fetch-github-sources.sh /dist \
         curl libxml2 freetype libusb sqlite ffmpeg postgresql \
-        libpeer libsrtp mbedtls laneapp-lvgl
+        libpeer libsrtp mbedtls laneapp-lvgl \
+        cmake opencv mnn mnn-license hyperlpr
 
 FROM --platform=${BASE_PLATFORM} i386/ubuntu:16.04
 
@@ -117,15 +118,20 @@ COPY sources/export-vaapi-runtime.sh /work/export-vaapi-runtime.sh
 COPY sources/lane2nd-lv_conf.h /work/lane2nd-lv_conf.h
 COPY sources/rebuildffmpeg.sh /work/rebuildffmpeg.sh
 COPY sources/rebuildfreetype.sh /work/rebuildfreetype.sh
+COPY sources/rebuildcmake.sh /work/rebuildcmake.sh
+COPY sources/rebuildhyperlpr.sh /work/rebuildhyperlpr.sh
 COPY sources/rebuildlaneapp-lvgl.sh /work/rebuildlaneapp-lvgl.sh
 COPY sources/rebuildlibpeer.sh /work/rebuildlibpeer.sh
 COPY sources/rebuildlibusb.sh /work/rebuildlibusb.sh
 COPY sources/rebuildlibxml2.sh /work/rebuildlibxml2.sh
 COPY sources/rebuildmbedtls.sh /work/rebuildmbedtls.sh
 COPY sources/rebuildminigui.sh /work/rebuildminigui.sh
+COPY sources/rebuildmnn.sh /work/rebuildmnn.sh
+COPY sources/rebuildopencv.sh /work/rebuildopencv.sh
 COPY sources/rebuildpostgresql.sh /work/rebuildpostgresql.sh
 COPY sources/rebuildsqlite.sh /work/rebuildsqlite.sh
 COPY sources/verify-x86-static.sh /work/verify-x86-static.sh
+COPY sources/patches/ /work/patches/
 COPY --from=fetcher /dist/ /dist/
 COPY sources/minigui2.0.4-eb30dfdc.tar.gz /work/minigui2.0.4-eb30dfdc.tar.gz
 
@@ -148,7 +154,7 @@ RUN test -f /usr/lib/i386-linux-gnu/libz.a && \
     /work/rebuildminigui.sh x86 && \
     /work/build-selected-deps.sh x86 \
         mbedtls curl libxml2 freetype sqlite libusb ffmpeg postgresql \
-        libpeer laneapp-lvgl && \
+        libpeer laneapp-lvgl cmake opencv mnn hyperlpr && \
     find /usr/local/lib/pkgconfig -type f -name '*.pc' \
         -exec sed -i 's/-lz\([[:space:]]\|$\)/-l:libz.a\1/g' {} + && \
     /work/export-vaapi-runtime.sh && \
