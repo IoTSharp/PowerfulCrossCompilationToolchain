@@ -24,6 +24,7 @@ libopencv_core.a
 libopencv_imgproc.a
 libMNN.a
 libhyperlpr3.a
+liblaneapp-nanodet.a
 "
 
 for archive in $required_archives; do
@@ -37,12 +38,17 @@ valgrind --version
 
 pkg-config --exists \
     laneapp-webrtc laneapp-lvgl libcurl libxml-2.0 libpq libusb-1.0 \
-    laneapp-hyperlpr3 libva libva-drm libdrm
+    laneapp-hyperlpr3 laneapp-nanodet libva libva-drm libdrm
 test "$(pkg-config --modversion laneapp-hyperlpr3)" = "3.0.1.9307450"
+test "$(pkg-config --modversion laneapp-nanodet)" = "1.0.0-alpha-1"
 pkg-config --static --libs laneapp-hyperlpr3 | grep -q -- '-Wl,--whole-archive'
 pkg-config --static --libs laneapp-hyperlpr3 | grep -q -- '-lMNN'
 pkg-config --static --libs laneapp-hyperlpr3 | grep -q -- '-lopencv_imgproc'
 pkg-config --static --libs laneapp-hyperlpr3 | grep -q -- '-lopencv_core'
+pkg-config --static --libs laneapp-nanodet | grep -q -- '-Wl,--whole-archive'
+pkg-config --static --libs laneapp-nanodet | grep -q -- '-lMNN'
+pkg-config --static --libs laneapp-nanodet | grep -q -- '-lopencv_imgproc'
+pkg-config --static --libs laneapp-nanodet | grep -q -- '-lopencv_core'
 pkg-config --static --libs libcurl | grep -q -- '-lmbedtls'
 pkg-config --static --libs libcurl | grep -q -- '-lmbedcrypto'
 pkg-config --static --libs libcurl | grep -q -- '-l:libz.a'
@@ -61,7 +67,7 @@ if find /usr/local/lib -maxdepth 1 -name 'libpq.so*' | grep -q .; then
 fi
 
 if find /usr/local/lib -maxdepth 1 \
-    \( -name 'libopencv_*.so*' -o -name 'libMNN.so*' -o -name 'libhyperlpr3.so*' \) | \
+    \( -name 'libopencv_*.so*' -o -name 'libMNN.so*' -o -name 'libhyperlpr3.so*' -o -name 'liblaneapp-nanodet.so*' \) | \
     grep -q .; then
     echo "recognition shared libraries remain in the X86 static profile" >&2
     exit 1
@@ -92,6 +98,22 @@ model_object_dir=$(mktemp -d)
     fi
 )
 rm -rf "$model_object_dir"
+
+nanodet_model_hashes=/usr/local/share/licenses/laneapp-nanodet/MODEL-SHA256SUMS
+test -f "$nanodet_model_hashes"
+grep -qx '327AEC33F9B947144303A869AA4FFB3E69F12B4E40015C3DA2D415A0A05DF809  nanodet-plus-m_416_mnn.mnn' "$nanodet_model_hashes"
+
+nanodet_object_dir=$(mktemp -d)
+(
+    cd "$nanodet_object_dir"
+    ar x /usr/local/lib/liblaneapp-nanodet.a nanodet-model.o
+    readelf -S nanodet-model.o | grep -q '\.rodata'
+    if readelf -S nanodet-model.o | grep -q '\.data'; then
+        echo "embedded NanoDet model retained a writable data section" >&2
+        exit 1
+    fi
+)
+rm -rf "$nanodet_object_dir"
 
 if nm -A -u \
     /usr/local/lib/libcurl.a \
@@ -231,6 +253,47 @@ fi
 
 if ldd /tmp/pcct-hyperlpr-smoke | grep -q 'not found'; then
     echo "HyperLPR static smoke has unresolved dynamic dependencies" >&2
+    exit 1
+fi
+
+cat > /tmp/pcct-nanodet-smoke.cpp <<'EOF'
+#include <MNN/Interpreter.hpp>
+#include <laneapp_nanodet_model.h>
+
+#include <cstddef>
+#include <memory>
+
+int main()
+{
+    size_t size = 0U;
+    const unsigned char *data = laneapp_nanodet_model_data(&size);
+    std::unique_ptr<MNN::Interpreter> interpreter;
+    int result = 1;
+    if (data != NULL && size == 4822536U)
+    {
+        interpreter.reset(MNN::Interpreter::createFromBuffer(data, size));
+        result = interpreter.get() != NULL ? 0 : 1;
+    }
+    return result;
+}
+EOF
+
+g++ -std=c++11 -static-libstdc++ -static-libgcc \
+    -Wl,--gc-sections \
+    -o /tmp/pcct-nanodet-smoke /tmp/pcct-nanodet-smoke.cpp \
+    $(pkg-config --cflags --static --libs laneapp-nanodet)
+
+/tmp/pcct-nanodet-smoke
+
+if readelf -d /tmp/pcct-nanodet-smoke | \
+    grep NEEDED | \
+    grep -Eq 'lib(laneapp-nanodet|MNN|opencv|stdc\+\+|gcc_s|gomp)\.so'; then
+    echo "NanoDet static smoke retained a recognition or C++ runtime shared dependency" >&2
+    exit 1
+fi
+
+if ldd /tmp/pcct-nanodet-smoke | grep -q 'not found'; then
+    echo "NanoDet static smoke has unresolved dynamic dependencies" >&2
     exit 1
 fi
 

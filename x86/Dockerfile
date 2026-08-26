@@ -18,7 +18,7 @@ RUN chmod +x /work/*.sh && \
     /work/fetch-github-sources.sh /dist \
         curl libxml2 freetype libusb sqlite ffmpeg postgresql \
         libpeer libsrtp mbedtls laneapp-lvgl \
-        cmake opencv mnn mnn-license hyperlpr
+        cmake opencv mnn mnn-license hyperlpr nanodet-model nanodet-license
 
 FROM --platform=${BASE_PLATFORM} i386/ubuntu:16.04
 
@@ -127,6 +127,7 @@ COPY sources/rebuildlibxml2.sh /work/rebuildlibxml2.sh
 COPY sources/rebuildmbedtls.sh /work/rebuildmbedtls.sh
 COPY sources/rebuildminigui.sh /work/rebuildminigui.sh
 COPY sources/rebuildmnn.sh /work/rebuildmnn.sh
+COPY sources/rebuildnanodet.sh /work/rebuildnanodet.sh
 COPY sources/rebuildopencv.sh /work/rebuildopencv.sh
 COPY sources/rebuildpostgresql.sh /work/rebuildpostgresql.sh
 COPY sources/rebuildsqlite.sh /work/rebuildsqlite.sh
@@ -155,6 +156,7 @@ RUN test -f /usr/lib/i386-linux-gnu/libz.a && \
     /work/build-selected-deps.sh x86 \
         mbedtls curl libxml2 freetype sqlite libusb ffmpeg postgresql \
         libpeer laneapp-lvgl cmake opencv mnn hyperlpr && \
+    /work/rebuildnanodet.sh x86 && \
     find /usr/local/lib/pkgconfig -type f -name '*.pc' \
         -exec sed -i 's/-lz\([[:space:]]\|$\)/-l:libz.a\1/g' {} + && \
     /work/export-vaapi-runtime.sh && \

@@ -74,6 +74,16 @@ HYPERLPR_ARCHIVE="hyperlpr-${HYPERLPR_REVISION}.tar.gz"
 HYPERLPR_URL="https://github.com/szad670401/HyperLPR/archive/${HYPERLPR_REVISION}.tar.gz"
 HYPERLPR_SHA256="40FE119E652AC0241A27F6CF868A11773E9E19777B0A6A63F594C78F46D77F68"
 
+# NanoDet is an X86-only LaneApp object-detection profile. The released MNN
+# model is embedded into a static archive, so targets never load model files.
+NANODET_VERSION=1.0.0-alpha-1
+NANODET_MODEL_ARCHIVE="nanodet-plus-m_416_mnn.mnn"
+NANODET_MODEL_URL="https://github.com/RangiLyu/nanodet/releases/download/v1.0.0-alpha-1/${NANODET_MODEL_ARCHIVE}"
+NANODET_MODEL_SHA256="327AEC33F9B947144303A869AA4FFB3E69F12B4E40015C3DA2D415A0A05DF809"
+NANODET_LICENSE_ARCHIVE="nanodet-${NANODET_VERSION}-LICENSE"
+NANODET_LICENSE_URL="https://raw.githubusercontent.com/RangiLyu/nanodet/v1.0.0-alpha-1/LICENSE"
+NANODET_LICENSE_SHA256="B074CCA89569A8F57266E4EE8F81A0C728433D5525D98608FF708FEC91034312"
+
 LVGL_VERSION=9.5.0
 LVGL_TAG=v9.5.0
 LVGL_ARCHIVE="lvgl-${LVGL_TAG}.tar.gz"
@@ -122,6 +132,8 @@ pcct_dep_archive() {
         mnn) echo "$MNN_ARCHIVE" ;;
         mnn-license) echo "$MNN_LICENSE_ARCHIVE" ;;
         hyperlpr) echo "$HYPERLPR_ARCHIVE" ;;
+        nanodet-model) echo "$NANODET_MODEL_ARCHIVE" ;;
+        nanodet-license) echo "$NANODET_LICENSE_ARCHIVE" ;;
         lvgl) echo "$LVGL_ARCHIVE" ;;
         laneapp-lvgl) echo "$LANEAPP_LVGL_ARCHIVE" ;;
         libpeer) echo "$LIBPEER_ARCHIVE" ;;
@@ -149,6 +161,8 @@ pcct_dep_url() {
         mnn) echo "$MNN_URL" ;;
         mnn-license) echo "$MNN_LICENSE_URL" ;;
         hyperlpr) echo "$HYPERLPR_URL" ;;
+        nanodet-model) echo "$NANODET_MODEL_URL" ;;
+        nanodet-license) echo "$NANODET_LICENSE_URL" ;;
         lvgl) echo "$LVGL_URL" ;;
         laneapp-lvgl) echo "$LANEAPP_LVGL_URL" ;;
         libpeer) echo "$LIBPEER_URL" ;;
@@ -176,6 +190,8 @@ pcct_dep_sha256() {
         mnn) echo "$MNN_SHA256" ;;
         mnn-license) echo "$MNN_LICENSE_SHA256" ;;
         hyperlpr) echo "$HYPERLPR_SHA256" ;;
+        nanodet-model) echo "$NANODET_MODEL_SHA256" ;;
+        nanodet-license) echo "$NANODET_LICENSE_SHA256" ;;
         lvgl) echo "$LVGL_SHA256" ;;
         laneapp-lvgl) echo "$LANEAPP_LVGL_SHA256" ;;
         libpeer) echo "$LIBPEER_SHA256" ;;
@@ -203,6 +219,7 @@ pcct_dep_version() {
         mnn) echo "$MNN_VERSION" ;;
         mnn-license) echo "$MNN_LICENSE_REVISION" ;;
         hyperlpr) echo "$HYPERLPR_VERSION" ;;
+        nanodet-model|nanodet-license) echo "$NANODET_VERSION" ;;
         lvgl) echo "$LVGL_VERSION" ;;
         laneapp-lvgl) echo "$LANEAPP_LVGL_VERSION" ;;
         libpeer) echo "$LIBPEER_VERSION" ;;
