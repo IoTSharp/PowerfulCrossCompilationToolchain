@@ -36,6 +36,15 @@ The observation function runs the same context and image buffer pipeline as
 the existing update function. It does not open media, load runtime models, or
 introduce another shared library.
 
+## ARM C++ Runtime Compatibility
+
+The legacy ARM profile uses the matching Ubuntu GCC 5.4 C++ headers and
+statically links its GCC 5 `libstdc++` and `libgcc` archives. The ARM compiler
+wrapper keeps the old string ABI, ARMv4T soft-float code generation, and the
+deployed EABI sysroot's glibc 2.13 ceiling. Do not force the EABI sysroot's GCC
+4.6.1 `libstdc++` ahead of the GCC 5 runtime: its headers are incompatible with
+the newer frontend and its library lacks symbols emitted by GCC 5 headers.
+
 ## Verification Gates
 
 The HyperLPR rebuild performs a production-helper smoke for OCR inference

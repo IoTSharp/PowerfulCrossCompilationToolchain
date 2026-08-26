@@ -156,7 +156,37 @@ RUN set -e; \
     ln -s /usr/local/bin/pcct-arm-pkg-config /work/toolchain_R2_EABI/usr/bin/pkg-config; \
     arm-none-linux-gnueabi-gcc --version | head -n 1 | grep -q '5\.4\.0'; \
     test "$(arm-none-linux-gnueabi-gcc -print-sysroot)" = "$PCCT_ARM_SYSROOT"; \
-    test -f "$(arm-none-linux-gnueabi-gcc -print-file-name=crt1.o)"
+    test -f "$(arm-none-linux-gnueabi-gcc -print-file-name=crt1.o)"; \
+    printf '%s\n' \
+        '#include <math.h>' \
+        '#include <chrono>' \
+        '#include <condition_variable>' \
+        '#include <mutex>' \
+        '#include <unordered_map>' \
+        'int main() {' \
+        '    std::unordered_map<int, int> values;' \
+        '    values[1] = 2;' \
+        '    std::mutex mutex;' \
+        '    std::condition_variable wake;' \
+        '    std::unique_lock<std::mutex> lock(mutex);' \
+        '    wake.wait_for(lock, std::chrono::nanoseconds(1));' \
+        '    return (int)log((double)values.at(1));' \
+        '}' \
+        > /tmp/pcct-arm-cxx-runtime.cpp; \
+    arm-none-linux-gnueabi-g++ \
+        -std=c++11 -ffast-math /tmp/pcct-arm-cxx-runtime.cpp \
+        -L"$PCCT_ARM_SYSROOT/usr/lib" -pthread \
+        /usr/lib/gcc-cross/arm-linux-gnueabi/5/libstdc++.a -static-libgcc \
+        -lm -lrt -o /tmp/pcct-arm-cxx-runtime; \
+    test "$(arm-none-linux-gnueabi-g++ -print-file-name=libstdc++.a)" = \
+        "/usr/lib/gcc-cross/arm-linux-gnueabi/5/libstdc++.a"; \
+    /usr/bin/arm-linux-gnueabi-readelf -h /tmp/pcct-arm-cxx-runtime | \
+        grep -q 'soft-float ABI'; \
+    ! /usr/bin/arm-linux-gnueabi-readelf -d /tmp/pcct-arm-cxx-runtime | \
+        grep NEEDED | grep -Eq 'lib(stdc\+\+|gcc_s)\.so'; \
+    ! /usr/bin/arm-linux-gnueabi-readelf --version-info \
+        /tmp/pcct-arm-cxx-runtime | grep -Eq 'GLIBC_2\.(1[4-9]|[2-9][0-9])'; \
+    rm -f /tmp/pcct-arm-cxx-runtime.cpp /tmp/pcct-arm-cxx-runtime
 
 RUN rm -rf \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/include/minigui \

@@ -8,6 +8,13 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 
 pcct_setup_target "${1:-}"
 
+cxx_runtime_libs=
+if [ "$PCCT_TARGET" = "arm" ]; then
+    # Keep the modern C++ runtime static while resolving POSIX clocks from the
+    # deployed EABI sysroot's legacy librt.
+    cxx_runtime_libs="/usr/lib/gcc-cross/arm-linux-gnueabi/5/libstdc++.a -static-libgcc"
+fi
+
 case "$PCCT_TARGET" in
     x86|arm) ;;
     *)
@@ -99,7 +106,7 @@ Description: LaneApp $PCCT_TARGET static NanoDet-Plus-m-416 profile with embedde
 Version: $NANODET_VERSION
 Cflags: -I\${includedir} -I\${includedir}/opencv4
 Libs: -L\${libdir} -llaneapp-nanodet
-Libs.private: -Wl,--whole-archive -lMNN -Wl,--no-whole-archive -lopencv_imgproc -lopencv_core -l:libz.a -pthread -ldl -lm -lrt
+Libs.private: -Wl,--whole-archive -lMNN -Wl,--no-whole-archive -lopencv_imgproc -lopencv_core -l:libz.a -pthread -ldl -lm $cxx_runtime_libs -lrt
 EOF
 
 license_dir="$PCCT_PREFIX/share/licenses/laneapp-nanodet"

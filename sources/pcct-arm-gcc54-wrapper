@@ -14,8 +14,10 @@ case "$name" in
         ;;
     arm-none-linux-gnueabi-g++)
         exec /usr/bin/arm-linux-gnueabi-g++-5 \
-            --sysroot="$sysroot" -B"$sysroot/usr/lib/" \
+            --sysroot="$sysroot" \
             "$@" -march=armv4t -mfloat-abi=soft \
+            -D_GLIBCXX_USE_CXX11_ABI=0 \
+            -fno-finite-math-only \
             -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
         ;;
     arm-none-linux-gnueabi-cpp)

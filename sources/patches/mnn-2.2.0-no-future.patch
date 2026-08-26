@@ -1,0 +1,84 @@
+diff --git a/source/core/Backend.hpp b/source/core/Backend.hpp
+index 8b24b87..7f3702c 100644
+--- a/source/core/Backend.hpp
++++ b/source/core/Backend.hpp
+@@ -14,7 +14,9 @@
+ #include <map>
+ #include "Command.hpp"
+ #include "NonCopyable.hpp"
++#ifndef MNN_FORBIT_MULTI_THREADS
+ #include <future>
++#endif
+ 
+ namespace MNN {
+ 
+@@ -273,11 +275,15 @@ public:
+     }
+     // FIXME: Temply used, in future will refract
+     bool hasAsyncWork() const;
++#ifndef MNN_FORBIT_MULTI_THREADS
+     void setAsyncWork(std::future<int>&& future);
++#endif
+     MNN_PUBLIC void waitAsyncWork();
+ 
+ private:
++#ifndef MNN_FORBIT_MULTI_THREADS
+     std::future<int> mFuture;
++#endif
+ };
+ 
+ /** abstract Runtime register */
+diff --git a/source/core/Backend.cpp b/source/core/Backend.cpp
+index df13497..6e36c1a 100644
+--- a/source/core/Backend.cpp
++++ b/source/core/Backend.cpp
+@@ -88,15 +88,23 @@ bool Backend::onReleaseBuffer(const Tensor* tensor, StorageType storageType) {
+     return true;
+ }
+ bool Runtime::hasAsyncWork() const {
++#ifdef MNN_FORBIT_MULTI_THREADS
++    return false;
++#else
+     return mFuture.valid();
++#endif
+ }
++#ifndef MNN_FORBIT_MULTI_THREADS
+ void Runtime::setAsyncWork(std::future<int>&& future) {
+     mFuture = std::move(future);
+ }
++#endif
+ void Runtime::waitAsyncWork() {
++#ifndef MNN_FORBIT_MULTI_THREADS
+     if (mFuture.valid()) {
+         mFuture.wait();
+     }
++#endif
+ }
+ 
+ } // namespace MNN
+diff --git a/source/core/Pipeline.cpp b/source/core/Pipeline.cpp
+index 9879838..2d2f368 100644
+--- a/source/core/Pipeline.cpp
++++ b/source/core/Pipeline.cpp
+@@ -306,6 +306,7 @@ ErrorCode Pipeline::encode(bool isStatic) {
+     return NO_ERROR;
+ }
+ 
++#ifndef MNN_FORBIT_MULTI_THREADS
+ void Pipeline::_pushTuningTask(std::vector<Schedule::PipelineInfo>&& initInfos) {
+     // Dup Tensors for initInfos;
+     std::map<Tensor*, std::shared_ptr<Tensor>> holdTensors;
+@@ -412,6 +413,13 @@ void Pipeline::_pushTuningTask(std::vector<Schedule::PipelineInfo>&& initInfos) {
+     }, std::move(initInfos), std::move(holdTensors), mBackend);
+     const_cast<Runtime*>(mRuntime)->setAsyncWork(std::move(future));
+ }
++#else
++void Pipeline::_pushTuningTask(std::vector<Schedule::PipelineInfo>&& initInfos) {
++    // CPU-only builds never enter the non-CPU tuning path. Keep the method so
++    // the class ABI remains unchanged without requiring std::future support.
++    (void)initInfos;
++}
++#endif
+ 
+ void Pipeline::_recycleDynamicMemory(Command* command) {
+     for (auto& t : command->outputs) {

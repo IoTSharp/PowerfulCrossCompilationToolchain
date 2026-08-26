@@ -30,6 +30,9 @@ if [ "$PCCT_TARGET" = "x86" ]; then
 else
     # The legacy ARM target is ARMv4T soft-float. Selecting processor "arm"
     # keeps MNN on its portable scalar CPU path instead of ARMv7 NEON assembly.
+    # Its libstdc++ exposes only a forward declaration of std::future; this
+    # CPU-only profile removes the unreachable asynchronous tuning storage.
+    patch -p1 < "$SCRIPT_DIR/patches/mnn-2.2.0-no-future.patch"
     mnn_use_sse=OFF
     cmake_processor_arg=
 fi

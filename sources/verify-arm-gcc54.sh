@@ -16,6 +16,7 @@ nm=$NM
 readelf=/usr/bin/arm-linux-gnueabi-readelf
 sysroot=$SYSROOT
 pkg_config=$PKG_CONFIG
+cxx_archive=/usr/lib/gcc-cross/arm-linux-gnueabi/5/libstdc++.a
 
 rm -rf "$workdir"
 mkdir -p "$workdir"
@@ -46,6 +47,9 @@ if "$readelf" --version-info "$workdir/probe-dynamic" | \
 fi
 
 test "$(printf '' | "$cc" -dM -E - | awk '/_FORTIFY_SOURCE/ { print $3 }')" = "0"
+test "$(printf '' | "$cxx" -dM -E -x c++ - | \
+    awk '/_GLIBCXX_USE_CXX11_ABI/ { print $3 }')" = "0"
+test "$("$cxx" -print-file-name=libstdc++.a)" = "$cxx_archive"
 "$pkg_config" --static --libs libcurl | grep -q -- '-lz'
 "$pkg_config" --static --libs libpq | grep -q -- '-l:libpgcommon_shlib.a'
 "$pkg_config" --static --libs libpq | grep -q -- '-l:libpgport.a'

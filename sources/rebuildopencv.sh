@@ -22,11 +22,17 @@ esac
 pcct_setup_target "$1"
 
 cmake_toolchain_arg=
+opencv_cxx_flags="-O2 -fPIC"
 if [ "$PCCT_IS_CROSS" = "1" ]; then
     toolchain_file=$(mktemp)
     trap 'rm -f "$toolchain_file"' EXIT INT TERM
     pcct_write_cmake_toolchain "$toolchain_file"
     cmake_toolchain_arg="-DCMAKE_TOOLCHAIN_FILE=$toolchain_file"
+fi
+if [ "$PCCT_TARGET" = "arm" ]; then
+    # This GCC 5 ARM libstdc++ profile omits std::exception_ptr. OpenCV keeps
+    # AsyncArray available through its cv::Exception fallback.
+    opencv_cxx_flags="$opencv_cxx_flags -DCV__EXCEPTION_PTR=0"
 fi
 
 # LaneApp recognition only needs matrix primitives and color/geometry
@@ -40,7 +46,7 @@ cmake .. $cmake_toolchain_arg \
     -DCMAKE_INSTALL_PREFIX="$PCCT_PREFIX" \
     -DCMAKE_INSTALL_LIBDIR=lib \
     -DCMAKE_C_FLAGS="-O2 -fPIC" \
-    -DCMAKE_CXX_FLAGS="-O2 -fPIC" \
+    -DCMAKE_CXX_FLAGS="$opencv_cxx_flags" \
     -DBUILD_SHARED_LIBS=OFF \
     -DBUILD_LIST=core,imgproc \
     -DBUILD_opencv_apps=OFF \

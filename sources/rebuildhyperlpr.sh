@@ -21,6 +21,13 @@ esac
 
 pcct_setup_target "$1"
 
+cxx_runtime_libs=
+if [ "$PCCT_TARGET" = "arm" ]; then
+    # Resolve GCC 5's static C++ runtime before the legacy sysroot librt so
+    # clock_gettime keeps the deployed GLIBC_2.4 symbol version.
+    cxx_runtime_libs="/usr/lib/gcc-cross/arm-linux-gnueabi/5/libstdc++.a -static-libgcc"
+fi
+
 # The LaneApp extensions keep upstream file loading and recognition intact
 # while adding an embedded:// resolver and an extend-only observation ABI.
 # HyperLPR stores this one source file with CRLF; normalize the extracted copy
@@ -222,7 +229,7 @@ Description: LaneApp $PCCT_TARGET static HyperLPR3 profile with embedded models 
 Version: $HYPERLPR_VERSION
 Cflags: -I\${includedir}
 Libs: -L\${libdir} -lhyperlpr3
-Libs.private: -Wl,--whole-archive -lMNN -Wl,--no-whole-archive -lopencv_imgproc -lopencv_core -l:libz.a -pthread -ldl -lm -lrt
+Libs.private: -Wl,--whole-archive -lMNN -Wl,--no-whole-archive -lopencv_imgproc -lopencv_core -l:libz.a -pthread -ldl -lm $cxx_runtime_libs -lrt
 EOF
 
 license_dir="$PCCT_PREFIX/share/licenses/laneapp-hyperlpr3"
