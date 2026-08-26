@@ -1,0 +1,409 @@
+diff --git a/cpp/c_api/hyper_lpr_sdk_observation.cc b/cpp/c_api/hyper_lpr_sdk_observation.cc
+new file mode 100644
+--- /dev/null
++++ b/cpp/c_api/hyper_lpr_sdk_observation.cc
+@@ -0,0 +1,76 @@
++#include "hyper_lpr_sdk_observation.h"
++
++#include "hyper_lpr_sdk_internal.h"
++
++#include <algorithm>
++#include <cstring>
++
++static_assert(sizeof(HLPR_DetectionObservation) == 100U,
++              "LaneApp observation item ABI changed");
++static_assert(sizeof(HLPR_DetectionObservationBatch) == 516U,
++              "LaneApp observation batch ABI changed");
++static_assert(hyper::kDetectionObservationCapacity ==
++                  HLPR_MAX_DETECTION_OBSERVATIONS,
++              "public and internal observation capacities differ");
++
++namespace {
++
++void ResetObservationBatch(P_HLPR_DetectionObservationBatch observations) {
++    std::memset(observations, 0, sizeof(*observations));
++    observations->abi_version = HLPR_DETECTION_OBSERVATION_ABI_VERSION;
++}
++
++}  // namespace
++
++HREESULT HLPR_ContextObserveDetections(
++        P_HLPR_Context ctx, P_HLPR_DataBuffer buffer,
++        P_HLPR_DetectionObservationBatch observations) {
++    if (observations == nullptr) {
++        return Err;
++    }
++    ResetObservationBatch(observations);
++    if (ctx == nullptr || buffer == nullptr ||
++        ctx->impl.getMInitStatus() != hyper::hRetOk) {
++        return Err;
++    }
++    try {
++        ctx->impl(buffer->impl);
++        const hyper::DetectionObservationList& source =
++                ctx->impl.getMDetectionObservations();
++        const size_t count = (std::min)(
++                ctx->impl.getMDetectionObservationCount(),
++                static_cast<size_t>(HLPR_MAX_DETECTION_OBSERVATIONS));
++        observations->count = static_cast<uint32_t>(count);
++        observations->inference_width = buffer->impl.GetWidth();
++        observations->inference_height = buffer->impl.GetHeight();
++        if (buffer->impl.GetRotationMode() == hyper::ROTATION_90 ||
++            buffer->impl.GetRotationMode() == hyper::ROTATION_270) {
++            std::swap(observations->inference_width,
++                      observations->inference_height);
++        }
++        for (size_t index = 0U; index < count; ++index) {
++            const hyper::DetectionObservation& input = source[index];
++            HLPR_DetectionObservation& output = observations->items[index];
++            output.struct_size = sizeof(output);
++            output.flags = HLPR_DETECTION_OBSERVATION_DETECTED;
++            output.detector_confidence = input.detector_confidence;
++            output.ocr_confidence = input.ocr_confidence;
++            output.x1 = input.x1;
++            output.y1 = input.y1;
++            output.x2 = input.x2;
++            output.y2 = input.y2;
++            output.plate_type = input.plate_type;
++            if (input.ocr_valid) {
++                output.flags |= HLPR_DETECTION_OBSERVATION_OCR_VALID;
++                std::memcpy(output.plate_utf8, input.plate_utf8,
++                            sizeof(output.plate_utf8));
++            } else {
++                output.plate_utf8[0] = '\0';
++            }
++        }
++        return Ok;
++    } catch (...) {
++        ResetObservationBatch(observations);
++        return Err;
++    }
++}
+diff --git a/cpp/c_api/hyper_lpr_sdk_observation.h b/cpp/c_api/hyper_lpr_sdk_observation.h
+new file mode 100644
+--- /dev/null
++++ b/cpp/c_api/hyper_lpr_sdk_observation.h
+@@ -0,0 +1,55 @@
++#ifndef HYPER_LPR_SDK_OBSERVATION_H
++#define HYPER_LPR_SDK_OBSERVATION_H
++
++#include "hyper_lpr_sdk.h"
++
++#define HLPR_DETECTION_OBSERVATION_TEXT_SIZE 64U
++#define HLPR_DETECTION_OBSERVATION_ABI_VERSION 1U
++#define HLPR_MAX_DETECTION_OBSERVATIONS 5U
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++enum {
++    HLPR_DETECTION_OBSERVATION_DETECTED = 0x01U,
++    HLPR_DETECTION_OBSERVATION_OCR_VALID = 0x02U
++};
++
++typedef struct HLPR_DetectionObservation {
++    uint32_t struct_size;
++    uint32_t flags;
++    float detector_confidence;
++    float ocr_confidence;
++    float x1;
++    float y1;
++    float x2;
++    float y2;
++    int plate_type;
++    char plate_utf8[HLPR_DETECTION_OBSERVATION_TEXT_SIZE];
++} HLPR_DetectionObservation, *P_HLPR_DetectionObservation;
++
++typedef struct HLPR_DetectionObservationBatch {
++    uint32_t abi_version;
++    uint32_t count;
++    int inference_width;
++    int inference_height;
++    HLPR_DetectionObservation items[HLPR_MAX_DETECTION_OBSERVATIONS];
++} HLPR_DetectionObservationBatch, *P_HLPR_DetectionObservationBatch;
++
++/************************************************************************
++* Run the normal HyperLPR pipeline and expose detector observations before
++* OCR filtering. The caller owns a fixed-capacity result and no SDK array is
++* returned. OCR_VALID is set only when the existing confidence and minimum
++* text-length gates pass; otherwise plate_utf8 starts with a NUL byte.
++************************************************************************/
++HYPER_CAPI_EXPORT extern HREESULT HLPR_ContextObserveDetections(
++        P_HLPR_Context ctx,
++        P_HLPR_DataBuffer buffer,
++        P_HLPR_DetectionObservationBatch observations);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif
+diff --git a/cpp/src/context_module/detection_observation.cpp b/cpp/src/context_module/detection_observation.cpp
+new file mode 100644
+--- /dev/null
++++ b/cpp/src/context_module/detection_observation.cpp
+@@ -0,0 +1,70 @@
++#include "detection_observation.h"
++
++#include <algorithm>
++#include <cmath>
++#include <cstring>
++
++namespace hyper {
++
++bool InitializeDetectionObservation(const PlateLocation& location,
++                                    int image_width, int image_height,
++                                    DetectionObservation* observation) {
++    if (observation == nullptr) {
++        return false;
++    }
++    std::memset(observation, 0, sizeof(*observation));
++    observation->plate_type = static_cast<int>(PlateType::UNKNOWN);
++    if (image_width <= 0 || image_height <= 0 ||
++        !std::isfinite(location.det_confidence) ||
++        location.det_confidence < 0.0f ||
++        location.det_confidence > 1.0f ||
++        !std::isfinite(location.x1) || !std::isfinite(location.y1) ||
++        !std::isfinite(location.x2) || !std::isfinite(location.y2)) {
++        return false;
++    }
++    const float width = static_cast<float>(image_width);
++    const float height = static_cast<float>(image_height);
++    const float x1 = (std::max)(0.0f, (std::min)(location.x1, width));
++    const float y1 = (std::max)(0.0f, (std::min)(location.y1, height));
++    const float x2 = (std::max)(0.0f, (std::min)(location.x2, width));
++    const float y2 = (std::max)(0.0f, (std::min)(location.y2, height));
++    if (x2 <= x1 || y2 <= y1) {
++        return false;
++    }
++    observation->detector_confidence = location.det_confidence;
++    observation->x1 = x1;
++    observation->y1 = y1;
++    observation->x2 = x2;
++    observation->y2 = y2;
++    return true;
++}
++
++void ApplyDetectionObservationOcr(bool inference_succeeded,
++                                  const TextLine& text_line,
++                                  float confidence_threshold,
++                                  PlateType plate_type,
++                                  DetectionObservation* observation) {
++    if (observation == nullptr) {
++        return;
++    }
++    observation->ocr_valid = false;
++    observation->ocr_confidence = 0.0f;
++    observation->plate_type = static_cast<int>(PlateType::UNKNOWN);
++    observation->plate_utf8[0] = '\0';
++    if (!inference_succeeded || !std::isfinite(text_line.average_score)) {
++        return;
++    }
++    observation->ocr_confidence = text_line.average_score;
++    if (text_line.average_score < confidence_threshold ||
++        text_line.average_score < 0.0f || text_line.average_score > 1.0f ||
++        text_line.code.size() < 8U ||
++        text_line.code.size() >= sizeof(observation->plate_utf8)) {
++        return;
++    }
++    std::memcpy(observation->plate_utf8, text_line.code.c_str(),
++                text_line.code.size() + 1U);
++    observation->plate_type = static_cast<int>(plate_type);
++    observation->ocr_valid = true;
++}
++
++}  // namespace hyper
+diff --git a/cpp/src/context_module/detection_observation.h b/cpp/src/context_module/detection_observation.h
+new file mode 100644
+--- /dev/null
++++ b/cpp/src/context_module/detection_observation.h
+@@ -0,0 +1,42 @@
++#ifndef HYPERLPR3_DETECTION_OBSERVATION_H
++#define HYPERLPR3_DETECTION_OBSERVATION_H
++
++#include <array>
++#include <cstddef>
++
++#include "hyper_lpr_common.h"
++
++namespace hyper {
++
++const size_t kDetectionObservationCapacity = 5U;
++const size_t kDetectionObservationTextSize = 64U;
++
++struct DetectionObservation {
++    float detector_confidence;
++    float ocr_confidence;
++    float x1;
++    float y1;
++    float x2;
++    float y2;
++    int plate_type;
++    bool ocr_valid;
++    char plate_utf8[kDetectionObservationTextSize];
++};
++
++typedef std::array<DetectionObservation, kDetectionObservationCapacity>
++        DetectionObservationList;
++
++bool InitializeDetectionObservation(const PlateLocation& location,
++                                    int image_width,
++                                    int image_height,
++                                    DetectionObservation* observation);
++
++void ApplyDetectionObservationOcr(bool inference_succeeded,
++                                  const TextLine& text_line,
++                                  float confidence_threshold,
++                                  PlateType plate_type,
++                                  DetectionObservation* observation);
++
++}  // namespace hyper
++
++#endif
+diff --git a/cpp/src/context_module/hyper_lpr_context.cpp b/cpp/src/context_module/hyper_lpr_context.cpp
+--- a/cpp/src/context_module/hyper_lpr_context.cpp
++++ b/cpp/src/context_module/hyper_lpr_context.cpp
+@@ -22,5 +22,6 @@ void HyperLPRContext::operator()(CameraBuffer &buffer) {
+     m_plate_detector_->Detection(process_image, true, 1.0f);
+     PlateResultList().swap(m_object_results_);
++    m_detection_observation_count_ = 0U;
+     auto &detect_results = m_plate_detector_->m_results_;
+ //    std::sort(detect_results.begin(), detect_results.end(),
+ //              [](PlateLocation a, PlateLocation b) { return xyxyArea(a.x1, a.y1, a.x2, a.y2) > xyxyArea(b.x1, b.y1, b.x2, b.y2); });
+@@ -31,6 +32,16 @@ void HyperLPRContext::operator()(CameraBuffer &buffer) {
+     for (size_t i = 0; i < iteration_num; ++i) {
+         auto &loc = detect_results[i];
+         PlateResult obj;
++        DetectionObservation* detection_observation = nullptr;
++        if (m_detection_observation_count_ <
++                kDetectionObservationCapacity &&
++            InitializeDetectionObservation(
++                loc, process_image.cols, process_image.rows,
++                &m_detection_observations_[m_detection_observation_count_])) {
++            detection_observation =
++                    &m_detection_observations_[m_detection_observation_count_];
++            ++m_detection_observation_count_;
++        }
+         obj.x1 = loc.x1;
+         obj.y1 = loc.y1;
+         obj.x2 = loc.x2;
+@@ -44,6 +54,8 @@ void HyperLPRContext::operator()(CameraBuffer &buffer) {
+ 
+ 
+-        TextLine text_line;
++        TextLine text_line{};
++        text_line.average_score = 0.0f;
++        bool ocr_succeeded = true;
+         if (loc.layers == LayersNum::DOUBLE) {
+             int line = (int )((float )align_image.rows * 0.4f);
+             int bottom_h = align_image.rows - line;
+@@ -61,16 +73,22 @@ void HyperLPRContext::operator()(CameraBuffer &buffer) {
+                 cv::Mat align_pad;
+                 float wh_ratio = (float) align.cols / align.rows;
+                 imagePadding(align, align_pad, wh_ratio, m_plate_recognition_->getMInputImageSize());
+-                TextLine candidate_text;
++                TextLine candidate_text{};
++                candidate_text.average_score = 0.0f;
+ //                cv::imshow("align_pad", align_pad);
+ //                cv::waitKey(0);
+ //                if (j == 0)
+ //                    cv::imwrite("a.jpg", align_pad);
+-                m_plate_recognition_->Inference(align_pad, candidate_text);
++                if (m_plate_recognition_->Inference(align_pad, candidate_text) != hRetOk) {
++                    ocr_succeeded = false;
++                    break;
++                }
+                 text_line.code += candidate_text.code;
+                 text_line.average_score += candidate_text.average_score;
+             }
+-            text_line.average_score /= candidate.size();
++            if (ocr_succeeded) {
++                text_line.average_score /= candidate.size();
++            }
+ //            cv::imshow("top_crop", top_crop);
+ //            cv::imshow("bottom_crop", bottom_crop);
+ //            cv::waitKey(0);
+@@ -77,12 +94,19 @@ void HyperLPRContext::operator()(CameraBuffer &buffer) {
+             cv::Mat align_image_pad;
+             float wh_ratio = (float) align_image.cols / align_image.rows;
+             imagePadding(align_image, align_image_pad, wh_ratio, m_plate_recognition_->getMInputImageSize());
+-            m_plate_recognition_->Inference(align_image_pad, text_line);
++            ocr_succeeded = m_plate_recognition_->Inference(
++                    align_image_pad, text_line) == hRetOk;
+         }
+         cv::resize(align_image, align_image, m_plate_classification_->getMInputImageSize());
+ //        SLOG_CRITICAL("cfg: {}", text_line.average_score);
+ //        SLOG_CRITICAL("code: {}", text_line.code);
+-        if (text_line.average_score < m_plate_recognition_->getMConfidenceThreshold()) {
++        if (detection_observation != nullptr) {
++            ApplyDetectionObservationOcr(ocr_succeeded, text_line,
++                    m_plate_recognition_->getMConfidenceThreshold(),
++                    PlateType::UNKNOWN, detection_observation);
++        }
++        if (!ocr_succeeded || text_line.average_score <
++                m_plate_recognition_->getMConfidenceThreshold()) {
+             continue;
+         }
+ //        cv::imshow("resize", align_image_pad);
+@@ -114,6 +137,11 @@ void HyperLPRContext::operator()(CameraBuffer &buffer) {
+             obj.type = type;
+ 
+             strcpy(obj.code, text_line.code.c_str());
++            if (detection_observation != nullptr) {
++                ApplyDetectionObservationOcr(true, text_line,
++                        m_plate_recognition_->getMConfidenceThreshold(),
++                        type, detection_observation);
++            }
+ //            printf("%s\n", obj.code);
+ //        obj.code = text_line.code;
+ 
+@@ -198,6 +226,15 @@ PlateResultList &HyperLPRContext::getMObjectResults() {
+     return m_object_results_;
+ }
+ 
++const DetectionObservationList&
++HyperLPRContext::getMDetectionObservations() const {
++    return m_detection_observations_;
++}
++
++size_t HyperLPRContext::getMDetectionObservationCount() const {
++    return m_detection_observation_count_;
++}
++
+ PlateType HyperLPRContext::PreGetPlateType(std::string& code) {
+     PlateType type = PlateType::UNKNOWN;
+     if (code[0] == 'W' && code[1] == 'J'){
+diff --git a/cpp/src/context_module/hyper_lpr_context.h b/cpp/src/context_module/hyper_lpr_context.h
+--- a/cpp/src/context_module/hyper_lpr_context.h
++++ b/cpp/src/context_module/hyper_lpr_context.h
+@@ -8,6 +8,7 @@
+ #include "nn_implementation_module/all.h"
+ #include "buffer_module/all.h"
+ #include "hyper_lpr_common.h"
++#include "detection_observation.h"
+ 
+ namespace hyper {
+ 
+@@ -43,6 +44,10 @@ public:
+ 
+     PlateResultList &getMObjectResults();
+ 
++    const DetectionObservationList& getMDetectionObservations() const;
++
++    size_t getMDetectionObservationCount() const;
++
+     static PlateType PreGetPlateType(std::string& code);
+ 
+     int32_t getMInitStatus() const;
+@@ -57,6 +62,10 @@ private:
+ 
+     PlateResultList m_object_results_;
+ 
++    DetectionObservationList m_detection_observations_{};
++
++    size_t m_detection_observation_count_ = 0U;
++
+     int m_rec_max_num_ = 1;
+ 
+     int32_t m_init_status_ = hRetErr;

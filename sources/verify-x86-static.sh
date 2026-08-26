@@ -39,7 +39,9 @@ valgrind --version
 pkg-config --exists \
     laneapp-webrtc laneapp-lvgl libcurl libxml-2.0 libpq libusb-1.0 \
     laneapp-hyperlpr3 laneapp-nanodet libva libva-drm libdrm
-test "$(pkg-config --modversion laneapp-hyperlpr3)" = "3.0.1.9307450"
+test "$(pkg-config --modversion laneapp-hyperlpr3)" = "3.0.1.9307450.1"
+test "$(pkg-config --variable=detection_observation_abi laneapp-hyperlpr3)" = "1"
+test "$(pkg-config --variable=detection_observation_max laneapp-hyperlpr3)" = "5"
 test "$(pkg-config --modversion laneapp-nanodet)" = "1.0.0-alpha-1"
 pkg-config --static --libs laneapp-hyperlpr3 | grep -q -- '-Wl,--whole-archive'
 pkg-config --static --libs laneapp-hyperlpr3 | grep -q -- '-lMNN'
@@ -86,6 +88,19 @@ grep -qx '954D1592AF55297F12CD82847365C47DBE5CC5A07AFF54AACF8F49A91784BF37  b640
 grep -qx 'AB946655FDBD0F9F8EE4EFA51AD3765F8FE757B12CE658D6944D3FB1DF7EACEA  b640x_head_h.mnn' "$model_hashes"
 grep -qx '0BBF5AEEE7E4D36BE2B545CADE9C025D70E0D0A2465DD701238EEA617C9EADB8  litemodel_cls_96xh.mnn' "$model_hashes"
 grep -qx 'DAA9ED4E674EDED73FF51BFCA528ACEC35EDBBB63A500BE65C49F74E5739E043  rpv3_mdict_160h.mnn' "$model_hashes"
+
+patch_hashes=/usr/local/share/licenses/laneapp-hyperlpr3/PATCH-SHA256SUMS
+test -f "$patch_hashes"
+grep -qx '14DB7042A4BA4F1A9AB77B2EF4E4E4FF10A70A7AE1ACC8F4FAD814CC82224742  hyperlpr3-embedded-models.patch' "$patch_hashes"
+grep -qx '187DFC88414B3BBE120CA96AC33685EBA127457E88BD39DC117A687D67152543  hyperlpr3-detector-observations.patch' "$patch_hashes"
+grep -qx 'symbol=HLPR_ContextObserveDetections' \
+    /usr/local/share/licenses/laneapp-hyperlpr3/CAPABILITIES.txt
+
+test -f /usr/local/include/hyper_lpr_sdk_observation.h
+nm -g --defined-only /usr/local/lib/libhyperlpr3.a | \
+    grep -q ' T HLPR_ContextObserveDetections$'
+nm -g --defined-only /usr/local/lib/libhyperlpr3.a | \
+    grep -q ' T HLPR_ContextUpdateStream$'
 
 model_object_dir=$(mktemp -d)
 (
@@ -212,23 +227,64 @@ fi
 cat > /tmp/pcct-hyperlpr-smoke.cpp <<'EOF'
 #include <hyper_lpr_sdk.h>
 #include <hyper_lpr_sdk_memory.h>
+#include <hyper_lpr_sdk_observation.h>
 
+#include <cstddef>
 #include <cstring>
 
+static_assert(sizeof(HLPR_DetectionObservation) == 100U,
+              "LaneApp observation item ABI changed");
+static_assert(offsetof(HLPR_DetectionObservation, plate_utf8) == 36U,
+              "LaneApp observation text offset changed");
+static_assert(sizeof(HLPR_DetectionObservationBatch) == 516U,
+              "LaneApp observation batch ABI changed");
+static_assert(offsetof(HLPR_DetectionObservationBatch, items) == 16U,
+              "LaneApp observation item-array offset changed");
+
 int main() {
+    static unsigned char image[320U * 240U * 3U];
     HLPR_ContextConfiguration configuration;
     P_HLPR_Context context = NULL;
+    P_HLPR_DataBuffer buffer = NULL;
+    HLPR_DetectionObservationBatch observations;
+    HLPR_PlateResultList results;
     int result = 1;
     std::memset(&configuration, 0, sizeof(configuration));
-    configuration.max_num = 1;
+    std::memset(&observations, 0, sizeof(observations));
+    std::memset(&results, 0, sizeof(results));
+    configuration.max_num = HLPR_MAX_DETECTION_OBSERVATIONS;
     configuration.threads = 1;
     configuration.box_conf_threshold = 0.3f;
     configuration.nms_threshold = 0.5f;
     configuration.rec_confidence_threshold = 0.75f;
     configuration.det_level = DETECT_LEVEL_LOW;
     context = HLPR_CreateContextFromEmbeddedModels(&configuration);
-    if (context != NULL && HLPR_ContextQueryStatus(context) == Ok) {
+    buffer = HLPR_CreateDataBufferEmpty();
+    if (context != NULL && buffer != NULL &&
+        HLPR_ContextQueryStatus(context) == Ok &&
+        HLPR_DataBufferSetData(buffer, image, 320, 240) == Ok &&
+        HLPR_DataBufferSetRotationMode(buffer, CAMERA_ROTATION_0) == Ok &&
+        HLPR_DataBufferSetStreamFormat(buffer, STREAM_BGR) == Ok &&
+        HLPR_ContextObserveDetections(context, buffer, &observations) == Ok &&
+        observations.abi_version == HLPR_DETECTION_OBSERVATION_ABI_VERSION &&
+        observations.count <= HLPR_MAX_DETECTION_OBSERVATIONS &&
+        observations.inference_width == 320 &&
+        observations.inference_height == 240 &&
+        HLPR_ContextUpdateStream(context, buffer, &results) == Ok &&
+        (results.plate_size == 0U || results.plates != NULL)) {
         result = 0;
+        for (uint32_t index = 0U; index < observations.count; ++index) {
+            const HLPR_DetectionObservation& item = observations.items[index];
+            if (item.struct_size != sizeof(item) ||
+                (item.flags & HLPR_DETECTION_OBSERVATION_DETECTED) == 0U ||
+                ((item.flags & HLPR_DETECTION_OBSERVATION_OCR_VALID) == 0U &&
+                 item.plate_utf8[0] != '\0')) {
+                result = 1;
+            }
+        }
+    }
+    if (buffer != NULL) {
+        HLPR_ReleaseDataBuffer(buffer);
     }
     if (context != NULL) {
         HLPR_ReleaseContext(context);

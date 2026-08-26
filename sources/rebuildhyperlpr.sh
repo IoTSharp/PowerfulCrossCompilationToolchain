@@ -13,17 +13,25 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 
 pcct_setup_target x86
 
-# The LaneApp extension keeps upstream file loading intact while adding a
-# separate embedded:// resolver and C entry point for the static profile.
+# The LaneApp extensions keep upstream file loading and recognition intact
+# while adding an embedded:// resolver and an extend-only observation ABI.
 # HyperLPR stores this one source file with CRLF; normalize the extracted copy
-# so GNU patch applies the pinned mixed-file patch consistently on Xenial.
+# so GNU patch applies the pinned mixed-file patches consistently on Xenial.
+embedded_patch="$SCRIPT_DIR/patches/hyperlpr3-embedded-models.patch"
+observation_patch="$SCRIPT_DIR/patches/hyperlpr3-detector-observations.patch"
+printf '%s  %s\n' "$HYPERLPR_EMBEDDED_PATCH_SHA256" "$embedded_patch" | \
+    sha256sum -c -
+printf '%s  %s\n' "$HYPERLPR_OBSERVATION_PATCH_SHA256" "$observation_patch" | \
+    sha256sum -c -
 sed -i 's/\r$//' cpp/src/inference_helper_module/inference_helper_mnn.cpp
-patch -p1 < "$SCRIPT_DIR/patches/hyperlpr3-embedded-models.patch"
+patch -p1 < "$embedded_patch"
+patch -p1 < "$observation_patch"
 
 model_dir="resource/models/r2_mobile"
 model_manifest="$(mktemp)"
+patch_manifest="$(mktemp)"
 build_dir="$(mktemp -d)"
-trap 'rm -rf "$model_manifest" "$build_dir"' EXIT INT TERM
+trap 'rm -rf "$model_manifest" "$patch_manifest" "$build_dir"' EXIT INT TERM
 
 cat > "$model_manifest" <<'EOF'
 93BECA2566CCC8AD7FB5E5CE1BD87D158C3F1B2A6B48C1380366ABCF9F2C6F66  b320_backbone_h.mnn
@@ -32,6 +40,11 @@ B2B5C4126AAAD2C80901DDB8693005D73BC9856A80803DAE9C7D598033273841  b320_header_h.
 AB946655FDBD0F9F8EE4EFA51AD3765F8FE757B12CE658D6944D3FB1DF7EACEA  b640x_head_h.mnn
 0BBF5AEEE7E4D36BE2B545CADE9C025D70E0D0A2465DD701238EEA617C9EADB8  litemodel_cls_96xh.mnn
 DAA9ED4E674EDED73FF51BFCA528ACEC35EDBBB63A500BE65C49F74E5739E043  rpv3_mdict_160h.mnn
+EOF
+
+cat > "$patch_manifest" <<EOF
+$HYPERLPR_EMBEDDED_PATCH_SHA256  hyperlpr3-embedded-models.patch
+$HYPERLPR_OBSERVATION_PATCH_SHA256  hyperlpr3-detector-observations.patch
 EOF
 
 (
@@ -97,18 +110,99 @@ done
 "$AR" rcs "$build_dir/libhyperlpr3.a" "$build_dir"/*.o
 "$RANLIB" "$build_dir/libhyperlpr3.a"
 
+# Exercise the production projection helper with synthetic detector/OCR stage
+# outputs. This covers the gates that cannot be made deterministic with a
+# blank model input while still linking the same object used by the archive.
+cat > "$build_dir/detection-observation-smoke.cpp" <<'EOF'
+#include "context_module/detection_observation.h"
+
+#include <cmath>
+#include <cstring>
+
+int main() {
+    hyper::PlateLocation location{};
+    hyper::DetectionObservation observation{};
+    hyper::TextLine text_line{};
+    location.x1 = 10.0f;
+    location.y1 = 20.0f;
+    location.x2 = 110.0f;
+    location.y2 = 60.0f;
+    location.det_confidence = 0.91f;
+    if (!hyper::InitializeDetectionObservation(
+            location, 320, 240, &observation)) {
+        return 1;
+    }
+
+    text_line.code = "TEST1234";
+    text_line.average_score = 0.95f;
+    hyper::ApplyDetectionObservationOcr(
+            false, text_line, 0.80f, hyper::PlateType::BLUE, &observation);
+    if (observation.ocr_valid || observation.ocr_confidence != 0.0f ||
+        observation.plate_utf8[0] != '\0') {
+        return 2;
+    }
+
+    text_line.average_score = 0.79f;
+    hyper::ApplyDetectionObservationOcr(
+            true, text_line, 0.80f, hyper::PlateType::BLUE, &observation);
+    if (observation.ocr_valid ||
+        std::fabs(observation.ocr_confidence - 0.79f) > 0.0001f ||
+        observation.plate_utf8[0] != '\0') {
+        return 3;
+    }
+
+    text_line.code = "SHORT";
+    text_line.average_score = 0.95f;
+    hyper::ApplyDetectionObservationOcr(
+            true, text_line, 0.80f, hyper::PlateType::BLUE, &observation);
+    if (observation.ocr_valid || observation.plate_utf8[0] != '\0') {
+        return 4;
+    }
+
+    text_line.code = "TEST1234";
+    hyper::ApplyDetectionObservationOcr(
+            true, text_line, 0.80f, hyper::PlateType::BLUE, &observation);
+    if (!observation.ocr_valid ||
+        std::strcmp(observation.plate_utf8, "TEST1234") != 0 ||
+        observation.plate_type != static_cast<int>(hyper::PlateType::BLUE) ||
+        std::fabs(observation.detector_confidence - 0.91f) > 0.0001f ||
+        observation.x1 != 10.0f || observation.y1 != 20.0f ||
+        observation.x2 != 110.0f || observation.y2 != 60.0f) {
+        return 5;
+    }
+    return 0;
+}
+EOF
+
+"$CXX" \
+    -std=c++11 \
+    -O2 \
+    -Icpp/src \
+    -Icpp/c_api \
+    -Icpp/platform \
+    -I"$PCCT_INCLUDEDIR" \
+    -I"$PCCT_INCLUDEDIR/opencv4" \
+    "$build_dir/detection-observation-smoke.cpp" \
+    "$build_dir/libhyperlpr3.a" \
+    -o "$build_dir/detection-observation-smoke"
+"$build_dir/detection-observation-smoke"
+
 mkdir -p "$PCCT_LIBDIR" "$PCCT_INCLUDEDIR" "$PCCT_PKGCONFIGDIR"
 install -m 0644 "$build_dir/libhyperlpr3.a" "$PCCT_LIBDIR/libhyperlpr3.a"
 install -m 0644 cpp/c_api/hyper_lpr_sdk.h "$PCCT_INCLUDEDIR/hyper_lpr_sdk.h"
 install -m 0644 cpp/c_api/hyper_lpr_sdk_memory.h "$PCCT_INCLUDEDIR/hyper_lpr_sdk_memory.h"
+install -m 0644 cpp/c_api/hyper_lpr_sdk_observation.h \
+    "$PCCT_INCLUDEDIR/hyper_lpr_sdk_observation.h"
 
 cat > "$PCCT_PKGCONFIGDIR/laneapp-hyperlpr3.pc" <<EOF
 prefix=$PCCT_PREFIX
 includedir=\${prefix}/include
 libdir=\${prefix}/lib
+detection_observation_abi=$HYPERLPR_OBSERVATION_ABI_VERSION
+detection_observation_max=$HYPERLPR_OBSERVATION_MAX
 
 Name: laneapp-hyperlpr3
-Description: LaneApp X86 static HyperLPR3 profile with embedded MNN models
+Description: LaneApp X86 static HyperLPR3 profile with embedded models and detector observations
 Version: $HYPERLPR_VERSION
 Cflags: -I\${includedir}
 Libs: -L\${libdir} -lhyperlpr3
@@ -119,6 +213,14 @@ license_dir="$PCCT_PREFIX/share/licenses/laneapp-hyperlpr3"
 mkdir -p "$license_dir"
 install -m 0644 LICENSE "$license_dir/HyperLPR-LICENSE"
 install -m 0644 "$model_manifest" "$license_dir/MODEL-SHA256SUMS"
+install -m 0644 "$patch_manifest" "$license_dir/PATCH-SHA256SUMS"
+cat > "$license_dir/CAPABILITIES.txt" <<EOF
+symbol=HLPR_ContextObserveDetections
+detection_observation_abi=$HYPERLPR_OBSERVATION_ABI_VERSION
+detection_observation_max=$HYPERLPR_OBSERVATION_MAX
+ocr_valid_gate=existing-confidence-and-minimum-8-byte-text
+runtime_models=embedded-read-only
+EOF
 cat > "$license_dir/NOTICE.txt" <<EOF
 LaneApp X86 HyperLPR3 static profile
 
@@ -136,9 +238,17 @@ OpenCV license: BSD-3-Clause (/usr/local/share/licenses/opencv-$OPENCV_VERSION/L
 The six HyperLPR model files are embedded as read-only ELF objects in
 libhyperlpr3.a. Their pinned hashes are recorded in MODEL-SHA256SUMS. No model
 file is required at LaneApp runtime.
+
+The LaneApp patches add embedded-model loading and the extend-only
+HLPR_ContextObserveDetections ABI. Patch hashes are recorded in
+PATCH-SHA256SUMS. The observation ABI returns at most
+$HYPERLPR_OBSERVATION_MAX fixed items; detector boxes survive OCR rejection,
+while rejected OCR text is always empty.
 EOF
 
 test -f "$PCCT_LIBDIR/libhyperlpr3.a"
 test -f "$PCCT_PKGCONFIGDIR/laneapp-hyperlpr3.pc"
 nm "$PCCT_LIBDIR/libhyperlpr3.a" | grep -q 'HLPR_CreateContextFromEmbeddedModels'
+nm "$PCCT_LIBDIR/libhyperlpr3.a" | grep -q 'HLPR_ContextObserveDetections'
+nm "$PCCT_LIBDIR/libhyperlpr3.a" | grep -q 'HLPR_ContextUpdateStream'
 nm "$PCCT_LIBDIR/libhyperlpr3.a" | grep -q '_binary_rpv3_mdict_160h_mnn_start'
