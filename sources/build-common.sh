@@ -166,9 +166,9 @@ pcct_setup_target() {
             PCCT_BUILD="x86_64-pc-linux-gnu"
             PCCT_ARCH="loongarch64"
             PCCT_PREFIX="/opt/cross-tools/target/usr"
-            PCCT_LIBDIR="/opt/cross-tools/target/usr/lib/loongarch64-linux-gnu"
+            PCCT_LIBDIR="/opt/cross-tools/target/usr/lib64"
             PCCT_INCLUDEDIR="/opt/cross-tools/target/usr/include"
-            PCCT_PKGCONFIGDIR="/opt/cross-tools/target/usr/lib/loongarch64-linux-gnu/pkgconfig"
+            PCCT_PKGCONFIGDIR="/opt/cross-tools/target/usr/lib64/pkgconfig"
             PCCT_CROSS_PREFIX="loongarch64-unknown-linux-gnu-"
             PCCT_IS_CROSS=1
             ;;

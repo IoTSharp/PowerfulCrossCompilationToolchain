@@ -3,7 +3,7 @@
 set -eu
 
 if [ "$#" -ne 1 ]; then
-    echo "usage: $0 <x86|arm>" >&2
+    echo "usage: $0 <x86|arm|la64>" >&2
     exit 1
 fi
 
@@ -39,6 +39,7 @@ case "$target" in
         fi
 
         install_root=/usr/local
+        install_libdir=$install_root/lib
         ;;
     arm)
         # The pinned source contains the legacy ARM cross-configuration used
@@ -48,6 +49,42 @@ case "$target" in
         make -j"$(nproc)"
         make install
         install_root=/work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr
+        install_libdir=$install_root/lib
+        ;;
+    la64|LA64)
+        # LoongArch uses the same pinned MiniGUI 2.0.4 feature profile as X86,
+        # but installs only target static archives into the cross sysroot.
+        SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+        . "$SCRIPT_DIR/build-common.sh"
+        pcct_setup_target la64
+        pcct_reset_build_tree
+        chmod 755 ./autogen.sh
+        ./autogen.sh
+        # MiniGUI 2.0.4 predates LoongArch; refresh only GNU canonicalization
+        # helpers so the pinned MiniGUI source and feature profile stay intact.
+        install -m 0755 /usr/share/misc/config.sub ./config.sub
+        install -m 0755 /usr/share/misc/config.guess ./config.guess
+        PATH="$PCCT_PREFIX/bin:$PATH" \
+        CPPFLAGS="-I$PCCT_INCLUDEDIR -I$PCCT_INCLUDEDIR/freetype2" \
+        CFLAGS="-O2 -fPIC" \
+        CXXFLAGS="-O2 -fPIC" \
+        ./configure \
+            --host="$PCCT_HOST" \
+            --build="$PCCT_BUILD" \
+            --prefix="$PCCT_PREFIX" \
+            --libdir="$PCCT_LIBDIR" \
+            --includedir="$PCCT_INCLUDEDIR" \
+            --disable-shared \
+            --enable-static \
+            --enable-ttfsupport \
+            --enable-ft2support \
+            --disable-libvcongui \
+            --disable-pngsupport
+        make -j"$(pcct_nproc)"
+        make install
+        rm -f "$PCCT_LIBDIR"/libminigui.so* "$PCCT_LIBDIR"/libmgext.so*
+        install_root=$PCCT_PREFIX
+        install_libdir=$PCCT_LIBDIR
         ;;
     *)
         echo "unsupported target: $target" >&2
@@ -55,8 +92,8 @@ case "$target" in
         ;;
 esac
 
-test -f "$install_root/lib/libminigui.a"
-test -f "$install_root/lib/libmgext.a"
+test -f "$install_libdir/libminigui.a"
+test -f "$install_libdir/libmgext.a"
 test -f "$install_root/include/minigui/common.h"
 test -f "$install_root/etc/MiniGUI.cfg"
 

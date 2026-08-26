@@ -2,19 +2,28 @@
 
 set -eu
 
-if [ "$#" -ne 1 ] || [ "$1" != "x86" ]; then
-    echo "usage: $0 x86" >&2
+if [ "$#" -ne 1 ]; then
+    echo "usage: $0 <x86|la64>" >&2
     exit 1
 fi
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 . "$SCRIPT_DIR/build-common.sh"
 
-pcct_setup_target x86
+case "$1" in
+    x86|la64|LA64) ;;
+    *)
+        echo "unsupported target: $1" >&2
+        exit 1
+        ;;
+esac
+
+pcct_setup_target "$1"
 
 sed -i 's|^//\(#define MBEDTLS_SSL_DTLS_SRTP\)|\1|' \
     include/mbedtls/mbedtls_config.h
-make -j"$(pcct_nproc)" lib CC="$CC" CFLAGS="-O2 -fPIC -std=c99"
+make -j"$(pcct_nproc)" lib \
+    CC="$CC" AR="$AR" PYTHON=python3 CFLAGS="-O2 -fPIC -std=c99"
 
 mkdir -p "$PCCT_LIBDIR" "$PCCT_INCLUDEDIR/mbedtls" "$PCCT_INCLUDEDIR/psa" "$PCCT_PKGCONFIGDIR"
 install -m 0644 \

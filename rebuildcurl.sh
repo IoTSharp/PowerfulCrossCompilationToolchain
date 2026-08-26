@@ -95,7 +95,7 @@ case "$PCCT_TARGET" in
             --prefix="$PCCT_PREFIX" \
             --libdir="$PCCT_LIBDIR" \
             --includedir="$PCCT_INCLUDEDIR" \
-            --without-ssl \
+            --with-mbedtls="$PCCT_PREFIX" \
             $COMMON_CURL_ARGS
         ;;
     *)

@@ -29,6 +29,16 @@ FREETYPE_ARCHIVE="freetype-${FREETYPE_TAG}.tar.gz"
 FREETYPE_URL="https://github.com/freetype/freetype/archive/refs/tags/${FREETYPE_TAG}.tar.gz"
 FREETYPE_SHA256="BC5C898E4756D373E0D991BAB053036C5EB2AA7C0D5C67E8662DDC6DA40C4103"
 
+LIBCONFIG_VERSION=1.7.3
+LIBCONFIG_ARCHIVE="libconfig-${LIBCONFIG_VERSION}.tar.gz"
+LIBCONFIG_URL="https://github.com/hyperrealm/libconfig/releases/download/v${LIBCONFIG_VERSION}/${LIBCONFIG_ARCHIVE}"
+LIBCONFIG_SHA256="545166D6CAC037744381D1E9CC5A5405094E7BFAD16A411699BCFF40BBB31EE7"
+
+JPEG_VERSION=2.1.5.1
+JPEG_ARCHIVE="libjpeg-turbo-${JPEG_VERSION}.tar.gz"
+JPEG_URL="https://github.com/libjpeg-turbo/libjpeg-turbo/archive/refs/tags/${JPEG_VERSION}.tar.gz"
+JPEG_SHA256="61846251941E5791005FB7FACE196EEC24541FCE04F12570C308557529E92C75"
+
 LIBUSB_VERSION=1.0.23
 LIBUSB_TAG=v1.0.23
 LIBUSB_ARCHIVE="libusb-${LIBUSB_VERSION}.tar.bz2"
@@ -128,6 +138,8 @@ pcct_dep_archive() {
         curl) echo "$CURL_ARCHIVE" ;;
         libxml2) echo "$LIBXML2_ARCHIVE" ;;
         freetype) echo "$FREETYPE_ARCHIVE" ;;
+        libconfig) echo "$LIBCONFIG_ARCHIVE" ;;
+        jpeg) echo "$JPEG_ARCHIVE" ;;
         libusb) echo "$LIBUSB_ARCHIVE" ;;
         sqlite) echo "$SQLITE_ARCHIVE" ;;
         ffmpeg) echo "$FFMPEG_ARCHIVE" ;;
@@ -157,6 +169,8 @@ pcct_dep_url() {
         curl) echo "$CURL_URL" ;;
         libxml2) echo "$LIBXML2_URL" ;;
         freetype) echo "$FREETYPE_URL" ;;
+        libconfig) echo "$LIBCONFIG_URL" ;;
+        jpeg) echo "$JPEG_URL" ;;
         libusb) echo "$LIBUSB_URL" ;;
         sqlite) echo "$SQLITE_URL" ;;
         ffmpeg) echo "$FFMPEG_URL" ;;
@@ -186,6 +200,8 @@ pcct_dep_sha256() {
         curl) echo "$CURL_SHA256" ;;
         libxml2) echo "$LIBXML2_SHA256" ;;
         freetype) echo "$FREETYPE_SHA256" ;;
+        libconfig) echo "$LIBCONFIG_SHA256" ;;
+        jpeg) echo "$JPEG_SHA256" ;;
         libusb) echo "$LIBUSB_SHA256" ;;
         sqlite) echo "$SQLITE_SHA256" ;;
         ffmpeg) echo "$FFMPEG_SHA256" ;;
@@ -215,6 +231,8 @@ pcct_dep_version() {
         curl) echo "$CURL_VERSION" ;;
         libxml2) echo "$LIBXML2_VERSION" ;;
         freetype) echo "$FREETYPE_VERSION" ;;
+        libconfig) echo "$LIBCONFIG_VERSION" ;;
+        jpeg) echo "$JPEG_VERSION" ;;
         libusb) echo "$LIBUSB_VERSION" ;;
         sqlite) echo "$SQLITE_VERSION" ;;
         ffmpeg) echo "$FFMPEG_VERSION" ;;
