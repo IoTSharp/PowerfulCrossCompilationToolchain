@@ -2,8 +2,8 @@
 
 set -eu
 
-if [ "$#" -ne 1 ] || [ "$1" != "x86" ]; then
-    echo "usage: $0 x86" >&2
+if [ "$#" -ne 1 ]; then
+    echo "usage: $0 <x86|arm>" >&2
     exit 1
 fi
 
@@ -11,7 +11,15 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 . "$SCRIPT_DIR/build-common.sh"
 . "$SCRIPT_DIR/dependency-versions.sh"
 
-pcct_setup_target x86
+case "$1" in
+    x86|arm) ;;
+    *)
+        echo "usage: $0 <x86|arm>" >&2
+        exit 1
+        ;;
+esac
+
+pcct_setup_target "$1"
 
 # The LaneApp extensions keep upstream file loading and recognition intact
 # while adding an embedded:// resolver and an extend-only observation ABI.
@@ -103,7 +111,10 @@ done
         "$OBJCOPY" \
             --rename-section .data=.rodata,alloc,load,readonly,data,contents \
             "$build_dir/model-$model_name.o"
-        file "$build_dir/model-$model_name.o" | grep -q 'ELF 32-bit.*Intel 80386'
+        case "$PCCT_TARGET" in
+            x86) file "$build_dir/model-$model_name.o" | grep -q 'ELF 32-bit.*Intel 80386' ;;
+            arm) file "$build_dir/model-$model_name.o" | grep -q 'ELF 32-bit.*ARM' ;;
+        esac
     done
 )
 
@@ -185,7 +196,12 @@ EOF
     "$build_dir/detection-observation-smoke.cpp" \
     "$build_dir/libhyperlpr3.a" \
     -o "$build_dir/detection-observation-smoke"
-"$build_dir/detection-observation-smoke"
+if [ "$PCCT_IS_CROSS" = "0" ]; then
+    "$build_dir/detection-observation-smoke"
+else
+    file "$build_dir/detection-observation-smoke" | \
+        grep -q 'ELF 32-bit LSB.*ARM.*EABI5'
+fi
 
 mkdir -p "$PCCT_LIBDIR" "$PCCT_INCLUDEDIR" "$PCCT_PKGCONFIGDIR"
 install -m 0644 "$build_dir/libhyperlpr3.a" "$PCCT_LIBDIR/libhyperlpr3.a"
@@ -202,7 +218,7 @@ detection_observation_abi=$HYPERLPR_OBSERVATION_ABI_VERSION
 detection_observation_max=$HYPERLPR_OBSERVATION_MAX
 
 Name: laneapp-hyperlpr3
-Description: LaneApp X86 static HyperLPR3 profile with embedded models and detector observations
+Description: LaneApp $PCCT_TARGET static HyperLPR3 profile with embedded models and detector observations
 Version: $HYPERLPR_VERSION
 Cflags: -I\${includedir}
 Libs: -L\${libdir} -lhyperlpr3
@@ -222,7 +238,7 @@ ocr_valid_gate=existing-confidence-and-minimum-8-byte-text
 runtime_models=embedded-read-only
 EOF
 cat > "$license_dir/NOTICE.txt" <<EOF
-LaneApp X86 HyperLPR3 static profile
+LaneApp $PCCT_TARGET HyperLPR3 static profile
 
 HyperLPR source: szad670401/HyperLPR
 HyperLPR revision: $HYPERLPR_REVISION
@@ -230,10 +246,10 @@ HyperLPR packaged version: $HYPERLPR_VERSION
 HyperLPR license: Apache-2.0 (HyperLPR-LICENSE)
 
 MNN source: alibaba/MNN tag $MNN_VERSION
-MNN license: Apache-2.0 (/usr/local/share/licenses/MNN-$MNN_VERSION/LICENSE.txt)
+MNN license: Apache-2.0 ($PCCT_PREFIX/share/licenses/MNN-$MNN_VERSION/LICENSE.txt)
 
 OpenCV source: opencv/opencv tag $OPENCV_VERSION
-OpenCV license: BSD-3-Clause (/usr/local/share/licenses/opencv-$OPENCV_VERSION/LICENSE)
+OpenCV license: BSD-3-Clause ($PCCT_PREFIX/share/licenses/opencv-$OPENCV_VERSION/LICENSE)
 
 The six HyperLPR model files are embedded as read-only ELF objects in
 libhyperlpr3.a. Their pinned hashes are recorded in MODEL-SHA256SUMS. No model
@@ -248,7 +264,7 @@ EOF
 
 test -f "$PCCT_LIBDIR/libhyperlpr3.a"
 test -f "$PCCT_PKGCONFIGDIR/laneapp-hyperlpr3.pc"
-nm "$PCCT_LIBDIR/libhyperlpr3.a" | grep -q 'HLPR_CreateContextFromEmbeddedModels'
-nm "$PCCT_LIBDIR/libhyperlpr3.a" | grep -q 'HLPR_ContextObserveDetections'
-nm "$PCCT_LIBDIR/libhyperlpr3.a" | grep -q 'HLPR_ContextUpdateStream'
-nm "$PCCT_LIBDIR/libhyperlpr3.a" | grep -q '_binary_rpv3_mdict_160h_mnn_start'
+"$NM" "$PCCT_LIBDIR/libhyperlpr3.a" | grep -q 'HLPR_CreateContextFromEmbeddedModels'
+"$NM" "$PCCT_LIBDIR/libhyperlpr3.a" | grep -q 'HLPR_ContextObserveDetections'
+"$NM" "$PCCT_LIBDIR/libhyperlpr3.a" | grep -q 'HLPR_ContextUpdateStream'
+"$NM" "$PCCT_LIBDIR/libhyperlpr3.a" | grep -q '_binary_rpv3_mdict_160h_mnn_start'

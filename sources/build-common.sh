@@ -180,3 +180,36 @@ pcct_setup_target() {
 
     export PCCT_TARGET="$target" PCCT_HOST PCCT_BUILD PCCT_ARCH PCCT_PREFIX PCCT_LIBDIR PCCT_INCLUDEDIR PCCT_PKGCONFIGDIR PCCT_CROSS_PREFIX PCCT_IS_CROSS
 }
+
+pcct_write_cmake_toolchain() {
+    if [ "$#" -ne 1 ]; then
+        echo "pcct_write_cmake_toolchain expects exactly one output path" >&2
+        exit 1
+    fi
+
+    if [ "${PCCT_IS_CROSS:-0}" != "1" ]; then
+        echo "pcct_write_cmake_toolchain requires a cross target" >&2
+        exit 1
+    fi
+
+    toolchain_file=$1
+    cat > "$toolchain_file" <<EOF
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR "$PCCT_ARCH")
+set(CMAKE_SYSROOT "$SYSROOT")
+set(CMAKE_C_COMPILER "$CC")
+set(CMAKE_CXX_COMPILER "$CXX")
+set(CMAKE_AR "$AR")
+set(CMAKE_ASM_COMPILER "$CC")
+set(CMAKE_LINKER "$LD")
+set(CMAKE_NM "$NM")
+set(CMAKE_RANLIB "$RANLIB")
+set(CMAKE_STRIP "$STRIP")
+set(CMAKE_OBJCOPY "$OBJCOPY")
+set(CMAKE_FIND_ROOT_PATH "$PCCT_PREFIX")
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+EOF
+}

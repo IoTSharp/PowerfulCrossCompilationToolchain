@@ -47,8 +47,8 @@ FFMPEG_ARCHIVE="ffmpeg-${FFMPEG_TAG}.tar.gz"
 FFMPEG_URL="https://github.com/FFmpeg/FFmpeg/archive/refs/tags/${FFMPEG_TAG}.tar.gz"
 FFMPEG_SHA256="36D12B77917CEF669484C39FE9ECEA6FEDC26D0F12A5B01C154BCC64AFF86019"
 
-# LaneApp HyperLPR3 is intentionally X86-only. These revisions are kept in
-# the shared manifest so the image build fetches once and LaneApp stays offline.
+# LaneApp HyperLPR3 is built for X86 and legacy ARM32. These revisions remain
+# shared so each image fetches once and LaneApp builds stay offline.
 CMAKE_VERSION=3.14.7
 CMAKE_ARCHIVE="cmake-${CMAKE_VERSION}.tar.gz"
 CMAKE_URL="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/${CMAKE_ARCHIVE}"
@@ -78,8 +78,8 @@ HYPERLPR_OBSERVATION_PATCH_SHA256="187DFC88414B3BBE120CA96AC33685EBA127457E88BD3
 HYPERLPR_OBSERVATION_ABI_VERSION=1
 HYPERLPR_OBSERVATION_MAX=5
 
-# NanoDet is an X86-only LaneApp object-detection profile. The released MNN
-# model is embedded into a static archive, so targets never load model files.
+# NanoDet is built for X86 and legacy ARM32. The released MNN model is embedded
+# into a static archive, so targets never load model files.
 NANODET_VERSION=1.0.0-alpha-1
 NANODET_MODEL_ARCHIVE="nanodet-plus-m_416_mnn.mnn"
 NANODET_MODEL_URL="https://github.com/RangiLyu/nanodet/releases/download/v1.0.0-alpha-1/${NANODET_MODEL_ARCHIVE}"

@@ -8,10 +8,13 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 
 pcct_setup_target "${1:-}"
 
-if [ "$PCCT_TARGET" != "x86" ]; then
-    echo "NanoDet is supported only by the X86 static profile" >&2
-    exit 1
-fi
+case "$PCCT_TARGET" in
+    x86|arm) ;;
+    *)
+        echo "NanoDet is supported only by the x86 and arm static profiles" >&2
+        exit 1
+        ;;
+esac
 
 model_path="/dist/$NANODET_MODEL_ARCHIVE"
 license_path="/dist/$NANODET_LICENSE_ARCHIVE"
@@ -32,7 +35,10 @@ cp "$model_path" "$build_dir/$NANODET_MODEL_ARCHIVE"
     "$OBJCOPY" \
         --rename-section .data=.rodata,alloc,load,readonly,data,contents \
         nanodet-model.o
-    file nanodet-model.o | grep -q 'ELF 32-bit.*Intel 80386'
+    case "$PCCT_TARGET" in
+        x86) file nanodet-model.o | grep -q 'ELF 32-bit.*Intel 80386' ;;
+        arm) file nanodet-model.o | grep -q 'ELF 32-bit.*ARM' ;;
+    esac
 )
 
 cat > "$build_dir/nanodet-model.c" <<'EOF'
@@ -89,7 +95,7 @@ includedir=\${prefix}/include
 libdir=\${prefix}/lib
 
 Name: laneapp-nanodet
-Description: LaneApp X86 static NanoDet-Plus-m-416 profile with embedded MNN model
+Description: LaneApp $PCCT_TARGET static NanoDet-Plus-m-416 profile with embedded MNN model
 Version: $NANODET_VERSION
 Cflags: -I\${includedir} -I\${includedir}/opencv4
 Libs: -L\${libdir} -llaneapp-nanodet
@@ -102,17 +108,17 @@ install -m 0644 "$license_path" "$license_dir/NanoDet-LICENSE"
 printf '%s  %s\n' "$NANODET_MODEL_SHA256" "$NANODET_MODEL_ARCHIVE" \
     > "$license_dir/MODEL-SHA256SUMS"
 cat > "$license_dir/NOTICE.txt" <<EOF
-LaneApp X86 NanoDet static profile
+LaneApp $PCCT_TARGET NanoDet static profile
 
 NanoDet model: $NANODET_MODEL_ARCHIVE
 NanoDet release: $NANODET_VERSION
 NanoDet license: Apache-2.0 (NanoDet-LICENSE)
 
 MNN source: alibaba/MNN tag $MNN_VERSION
-MNN license: Apache-2.0 (/usr/local/share/licenses/MNN-$MNN_VERSION/LICENSE.txt)
+MNN license: Apache-2.0 ($PCCT_PREFIX/share/licenses/MNN-$MNN_VERSION/LICENSE.txt)
 
 OpenCV source: opencv/opencv tag $OPENCV_VERSION
-OpenCV license: BSD-3-Clause (/usr/local/share/licenses/opencv-$OPENCV_VERSION/LICENSE)
+OpenCV license: BSD-3-Clause ($PCCT_PREFIX/share/licenses/opencv-$OPENCV_VERSION/LICENSE)
 
 The NanoDet model is embedded as read-only ELF data in liblaneapp-nanodet.a.
 No model file is required at LaneApp runtime.
@@ -120,5 +126,5 @@ EOF
 
 test -f "$PCCT_LIBDIR/liblaneapp-nanodet.a"
 test -f "$PCCT_PKGCONFIGDIR/laneapp-nanodet.pc"
-nm "$PCCT_LIBDIR/liblaneapp-nanodet.a" | grep -q 'laneapp_nanodet_model_data'
-nm "$PCCT_LIBDIR/liblaneapp-nanodet.a" | grep -q '_binary_nanodet_plus_m_416_mnn_mnn_start'
+"$NM" "$PCCT_LIBDIR/liblaneapp-nanodet.a" | grep -q 'laneapp_nanodet_model_data'
+"$NM" "$PCCT_LIBDIR/liblaneapp-nanodet.a" | grep -q '_binary_nanodet_plus_m_416_mnn_mnn_start'

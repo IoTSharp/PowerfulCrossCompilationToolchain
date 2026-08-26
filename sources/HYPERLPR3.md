@@ -5,7 +5,7 @@
 - Upstream: `szad670401/HyperLPR`
 - Revision: `9307450f7b7915be18f23a539ec05b41fe6629f4`
 - PCCT package version: `3.0.1.9307450.1`
-- Target: X86/i386 only
+- Targets: X86/i386 and legacy ARM32 EABI5 soft-float
 - Runtime shape: static HyperLPR3, MNN, and OpenCV archives with six read-only
   embedded model objects
 
@@ -39,11 +39,13 @@ introduce another shared library.
 ## Verification Gates
 
 The HyperLPR rebuild performs a production-helper smoke for OCR inference
-failure, low confidence, short text, and valid text. The X86 image verification
-then checks the public ABI sizes, pkg-config capability variables, patch and
-model manifests, both old and new archive symbols, a real embedded-model
-context, a blank BGR inference call through the observation API, and the
-absence of recognition or C++ runtime shared dependencies.
+failure, low confidence, short text, and valid text. The X86 image executes the
+native smoke and verifies a real embedded-model context plus a blank BGR
+inference call through the observation API. The ARM image cross-links the same
+public API and verifies the public ABI sizes, EABI5 soft-float output, glibc
+2.13 ceiling, pkg-config capability variables, patch and model manifests, both
+old and new archive symbols, and the absence of recognition or C++ runtime
+shared dependencies. Both profiles reject loose runtime model files.
 
 When the observation ABI changes, update all of the following together:
 

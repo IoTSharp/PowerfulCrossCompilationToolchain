@@ -4,6 +4,9 @@ FROM debian:bookworm-slim AS fetcher
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+ARG PCCT_HTTP_PROXY=http://host.docker.internal:7890
+ENV PCCT_HTTP_PROXY=${PCCT_HTTP_PROXY}
+
 COPY sources/dependency-versions.sh /work/dependency-versions.sh
 COPY sources/fetch-github-sources.sh /work/fetch-github-sources.sh
 
@@ -12,12 +15,9 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 RUN chmod +x /work/*.sh && \
-    /work/fetch-github-sources.sh /dist curl freetype libusb sqlite ffmpeg lvgl && \
-    echo "Fetching PostgreSQL 17.2..." && \
-    wget -q --https-only --tries=5 --waitretry=10 \
-        -O /dist/postgresql-REL_17_2.tar.gz \
-        https://github.com/postgres/postgres/archive/refs/tags/REL_17_2.tar.gz && \
-    echo "PostgreSQL 17.2 fetched successfully"
+    /work/fetch-github-sources.sh /dist \
+        curl freetype libusb sqlite ffmpeg lvgl postgresql \
+        cmake opencv mnn mnn-license hyperlpr nanodet-model nanodet-license
 
 FROM --platform=${BASE_PLATFORM} ubuntu:16.04
 
@@ -55,12 +55,18 @@ COPY sources/pcct-arm-gcc54-wrapper /usr/local/bin/pcct-arm-gcc54-wrapper
 COPY sources/pcct-arm-pkg-config /usr/local/bin/pcct-arm-pkg-config
 COPY sources/rebuildffmpeg.sh /work/rebuildffmpeg.sh
 COPY sources/rebuildfreetype.sh /work/rebuildfreetype.sh
+COPY sources/rebuildcmake.sh /work/rebuildcmake.sh
+COPY sources/rebuildhyperlpr.sh /work/rebuildhyperlpr.sh
 COPY sources/rebuildlibusb.sh /work/rebuildlibusb.sh
 COPY sources/rebuildlvgl.sh /work/rebuildlvgl.sh
 COPY sources/rebuildminigui.sh /work/rebuildminigui.sh
+COPY sources/rebuildmnn.sh /work/rebuildmnn.sh
+COPY sources/rebuildnanodet.sh /work/rebuildnanodet.sh
+COPY sources/rebuildopencv.sh /work/rebuildopencv.sh
 COPY sources/rebuildsqlite.sh /work/rebuildsqlite.sh
 COPY sources/rebuildpostgresql.sh /work/rebuildpostgresql.sh
 COPY sources/verify-arm-gcc54.sh /work/verify-arm-gcc54.sh
+COPY sources/patches/ /work/patches/
 COPY --from=fetcher /dist/ /dist/
 COPY sources/minigui2.0.4-eb30dfdc.tar.gz /work/minigui2.0.4-eb30dfdc.tar.gz
 
@@ -155,13 +161,21 @@ RUN set -e; \
 RUN rm -rf \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/include/minigui \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/include/freetype2 \
-        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/include/lvgl && \
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/include/lvgl \
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/include/MNN \
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/include/opencv4 \
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/share/licenses/laneapp-hyperlpr3 \
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/share/licenses/laneapp-nanodet && \
     rm -f \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/etc/MiniGUI.cfg \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/bin/curl-config \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/bin/freetype-config \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/include/lvgl.h \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/include/lv_conf.h \
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/include/hyper_lpr_sdk.h \
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/include/hyper_lpr_sdk_memory.h \
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/include/hyper_lpr_sdk_observation.h \
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/include/laneapp_nanodet_model.h \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libmgext* \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libminigui* \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libcurl* \
@@ -173,6 +187,10 @@ RUN rm -rf \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libavutil* \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libswscale* \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/liblvgl.a \
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libopencv_*.a \
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libMNN* \
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/libhyperlpr3* \
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/liblaneapp-nanodet* \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/pkgconfig/freetype2.pc \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/pkgconfig/libcurl.pc \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/pkgconfig/libusb-1.0.pc \
@@ -181,11 +199,21 @@ RUN rm -rf \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/pkgconfig/libavformat.pc \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/pkgconfig/libavutil.pc \
         /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/pkgconfig/libswscale.pc \
-        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/pkgconfig/lvgl.pc
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/pkgconfig/lvgl.pc \
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/pkgconfig/opencv4.pc \
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/pkgconfig/laneapp-hyperlpr3.pc \
+        /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/pkgconfig/laneapp-nanodet.pc
 
-RUN /work/build-selected-deps.sh arm freetype && \
+RUN env \
+        CC=/usr/bin/gcc CXX=/usr/bin/g++ AR=/usr/bin/ar AS=/usr/bin/as \
+        LD=/usr/bin/ld NM=/usr/bin/nm RANLIB=/usr/bin/ranlib \
+        STRIP=/usr/bin/strip OBJCOPY=/usr/bin/objcopy OBJDUMP=/usr/bin/objdump \
+        /work/build-selected-deps.sh x86 cmake && \
+    /work/build-selected-deps.sh arm freetype && \
     /work/rebuildminigui.sh arm && \
-    /work/build-selected-deps.sh arm sqlite libusb curl ffmpeg lvgl postgresql && \
+    /work/build-selected-deps.sh arm \
+        sqlite libusb curl ffmpeg lvgl postgresql opencv mnn hyperlpr && \
+    /work/rebuildnanodet.sh arm && \
     /work/verify-arm-gcc54.sh && \
     rm -rf /dist /tmp/pcct-*
 
