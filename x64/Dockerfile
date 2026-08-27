@@ -126,8 +126,9 @@ RUN chmod +x /work/*.sh && \
         sqlite libusb curl ffmpeg postgresql libpeer lvgl laneapp-lvgl \
         opencv mnn hyperlpr && \
     /work/rebuildnanodet.sh x64 && \
-    find /usr/local/lib/pkgconfig -type f -name '*.pc' \
-        -exec sed -i 's/-lz\([[:space:]]\|$\)/-l:libz.a\1/g' {} + && \
+    . /work/build-common.sh && \
+    pcct_setup_target x64 && \
+    pcct_enforce_static_zlib && \
     /work/verify-aligned-static.sh x64 && \
     rm -rf /dist /tmp/pcct-*
 

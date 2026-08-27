@@ -253,9 +253,9 @@ RUN env \
         sqlite libusb curl ffmpeg postgresql libpeer lvgl laneapp-lvgl \
         opencv mnn hyperlpr && \
     /work/rebuildnanodet.sh arm && \
-    find /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/pkgconfig \
-        -type f -name '*.pc' -exec sed -i \
-        's/-lz\([[:space:]]\|$\)/-l:libz.a\1/g' {} + && \
+    . /work/build-common.sh && \
+    pcct_setup_target arm && \
+    pcct_enforce_static_zlib && \
     /work/verify-aligned-static.sh arm && \
     /work/verify-arm-gcc54.sh && \
     rm -rf /dist /tmp/pcct-*

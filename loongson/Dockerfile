@@ -160,8 +160,9 @@ RUN /work/rebuildnanodet.sh la64
 
 COPY --chmod=0755 sources/verify-aligned-static.sh /work/verify-aligned-static.sh
 COPY --chmod=0755 sources/verify-loongarch64.sh /work/verify-loongarch64.sh
-RUN find /opt/cross-tools/target/usr/lib64/pkgconfig -type f -name '*.pc' \
-        -exec sed -i 's/-lz\([[:space:]]\|$\)/-l:libz.a\1/g' {} + && \
+RUN . /work/build-common.sh && \
+    pcct_setup_target la64 && \
+    pcct_enforce_static_zlib && \
     /work/verify-aligned-static.sh la64 && \
     /work/verify-loongarch64.sh && \
     rm -rf /dist /tmp/pcct-*

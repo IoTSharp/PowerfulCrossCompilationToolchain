@@ -236,6 +236,43 @@ pcct_assert_target_file() {
     fi
 }
 
+pcct_enforce_static_zlib() {
+    if [ "$#" -ne 0 ]; then
+        echo "pcct_enforce_static_zlib does not accept arguments" >&2
+        exit 1
+    fi
+
+    zlib_pc="$PCCT_PKGCONFIGDIR/zlib.pc"
+    zlib_pc_dir=$("${PKG_CONFIG:-pkg-config}" --variable=pcfiledir zlib)
+    zlib_pc_source="$zlib_pc_dir/zlib.pc"
+    if [ ! -f "$zlib_pc_source" ]; then
+        if [ ! -f "$zlib_pc" ]; then
+            echo "unable to locate zlib.pc for $PCCT_TARGET" >&2
+            exit 1
+        fi
+        zlib_pc_source=$zlib_pc
+    fi
+
+    mkdir -p "$PCCT_PKGCONFIGDIR"
+    if [ "$zlib_pc_source" != "$zlib_pc" ]; then
+        cp "$zlib_pc_source" "$zlib_pc"
+    fi
+
+    zlib_archive=$("$CC" -print-file-name=libz.a)
+    if [ "$zlib_archive" = "libz.a" ] || [ ! -f "$zlib_archive" ]; then
+        echo "unable to locate the target libz.a for $PCCT_TARGET" >&2
+        exit 1
+    fi
+
+    find "$PCCT_PKGCONFIGDIR" -type f -name '*.pc' \
+        -exec sed -i 's/-lz\([[:space:]]\|$\)/-l:libz.a\1/g' {} +
+    if [ "$zlib_pc_source" != "$zlib_pc" ]; then
+        sed -i 's/-lz\([[:space:]]\|$\)/-l:libz.a\1/g' "$zlib_pc_source"
+    fi
+    grep -Eq '^Libs:.*-l:libz\.a' "$zlib_pc"
+    grep -Eq '^Libs:.*-l:libz\.a' "$zlib_pc_source"
+}
+
 pcct_write_cmake_toolchain() {
     if [ "$#" -ne 1 ]; then
         echo "pcct_write_cmake_toolchain expects exactly one output path" >&2

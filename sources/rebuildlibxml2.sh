@@ -38,3 +38,8 @@ make install
 
 test -f "$PCCT_LIBDIR/libxml2.a"
 test -x "$PCCT_PREFIX/bin/xml2-config"
+
+libxml_pc="$PCCT_PKGCONFIGDIR/libxml-2.0.pc"
+test -f "$libxml_pc"
+sed -i '/^Libs:/ s/-lxml2\([[:space:]]\|$\)/-l:libxml2.a\1/g' "$libxml_pc"
+grep -Eq '^Libs:.*-l:libxml2\.a' "$libxml_pc"

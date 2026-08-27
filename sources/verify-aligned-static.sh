@@ -198,6 +198,7 @@ pcct_assert_no_needed "$workdir/webrtc-smoke" \
 
 cat > "$workdir/hyperlpr-smoke.cpp" <<'EOF'
 #include <hyper_lpr_sdk.h>
+#include <hyper_lpr_sdk_memory.h>
 #include <hyper_lpr_sdk_observation.h>
 
 int main()
@@ -210,7 +211,7 @@ int main()
     configuration.rec_confidence_threshold = 0.75f;
     configuration.det_level = DETECT_LEVEL_LOW;
     P_HLPR_Context context = HLPR_CreateContextFromEmbeddedModels(&configuration);
-    if (context == NULL) return 1;
+    if (context == nullptr) return 1;
     HLPR_ReleaseContext(context);
     return 0;
 }
