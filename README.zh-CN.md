@@ -4,6 +4,58 @@ English README: [README.md](README.md)
 
 本仓库保存的是构建镜像定义，供本地验证、CI，以及遗留的 VisualGDB 调试容器共同使用。
 
+## 已发布镜像
+
+以下 7 个 GHCR 镜像仓库均已发布可用的 `latest` 标签。容器平台表示运行构建容器所需的架构；构建目标表示容器内工具链实际生成的二进制架构和用途。
+
+| Compose 目标 | 已发布镜像 | 构建目标和用途 | 容器平台 | 主分支标签 | 镜像体积 |
+| --- | --- | --- | --- | --- | --- |
+| `x86-legacy`（Compose 中为 `x86legacy`） | `ghcr.io/iotsharp/pcct-build-x86-legacy` | 遗留 Wheezy X86 调试环境，以及历史 ARM + X86 VisualGDB 流程 | `linux/386` | `latest`、`sha-<提交>` | 拉取后以本地检查结果为准 |
+| `x86` | `ghcr.io/iotsharp/pcct-build-x86` | 原生 LaneApp i386 构建和验证 | `linux/386` | `latest`、`sha-<提交>` | 拉取后以本地检查结果为准 |
+| `arm` | `ghcr.io/iotsharp/pcct-build-arm` | 面向 glibc 2.13/ARMv4T 兼容基线的 ARM32 EABI5 soft-float 交叉构建 | `linux/amd64` | `latest`、`sha-<提交>` | 拉取后以本地检查结果为准 |
+| `x64` | `ghcr.io/iotsharp/pcct-build-x64` | 带对齐依赖和识别栈的原生 X86-64 构建 | `linux/amd64` | `latest`、`sha-<提交>` | 拉取后以本地检查结果为准 |
+| `arm64` | `ghcr.io/iotsharp/pcct-build-arm64` | 带对齐依赖和识别栈的 AArch64 交叉构建 | `linux/amd64` | `latest`、`sha-<提交>` | 拉取后以本地检查结果为准 |
+| `loongson` | `ghcr.io/iotsharp/pcct-build-loongson` | 带对齐依赖和识别栈的 LoongArch64/LA64 交叉构建 | `linux/amd64` | `latest`、`sha-<提交>` | 拉取后以本地检查结果为准 |
+| `centos79` | `ghcr.io/iotsharp/pcct-build-centos79` | 面向 CentOS 7.9.2009 和 glibc 2.17 的原生 X86-64 兼容性构建 | `linux/amd64` | `latest`、`7.9`、`7.9.2009`、`sha-<提交>` | 拉取后以本地检查结果为准 |
+
+一次性拉取当前 7 个 `latest` 镜像：
+
+```sh
+docker pull ghcr.io/iotsharp/pcct-build-x86-legacy:latest
+docker pull ghcr.io/iotsharp/pcct-build-x86:latest
+docker pull ghcr.io/iotsharp/pcct-build-arm:latest
+docker pull ghcr.io/iotsharp/pcct-build-x64:latest
+docker pull ghcr.io/iotsharp/pcct-build-arm64:latest
+docker pull ghcr.io/iotsharp/pcct-build-loongson:latest
+docker pull ghcr.io/iotsharp/pcct-build-centos79:latest
+```
+
+GHCR 包可见性与镜像是否成功推送是两套独立设置。如果拉取某个包时返回
+`unauthorized` 或 `denied`，应使用令牌带 `read:packages` 权限的账号登录，或由包
+管理员将该包设为 Public；不要把访问权限错误误判为构建缺失，也不要改用非官方镜像名。
+
+拉取后使用下面的命令查看本地镜像架构和以字节计的 Docker `.Size` 值，不在文档中填写未经实测的估算值：
+
+```sh
+docker image inspect --format '{{index .RepoTags 0}} {{.Architecture}} {{.Size}}' \
+  ghcr.io/iotsharp/pcct-build-x86-legacy:latest \
+  ghcr.io/iotsharp/pcct-build-x86:latest \
+  ghcr.io/iotsharp/pcct-build-arm:latest \
+  ghcr.io/iotsharp/pcct-build-x64:latest \
+  ghcr.io/iotsharp/pcct-build-arm64:latest \
+  ghcr.io/iotsharp/pcct-build-loongson:latest \
+  ghcr.io/iotsharp/pcct-build-centos79:latest
+```
+
+清理本地旧镜像时，先列出已安装标签，再输入一个完整的 `仓库:标签` 引用；下面的命令只删除该精确标签。需要保留 `latest` 和其他已发布标签时，不要使用 `docker image prune`、按仓库整体删除或由通配符生成批量删除列表。
+
+```sh
+docker image ls --format 'table {{.Repository}}\t{{.Tag}}\t{{.ID}}' 'ghcr.io/iotsharp/pcct-build-*'
+printf '请输入要删除的精确 仓库:标签：'
+IFS= read -r old_image
+docker image inspect "$old_image" >/dev/null && docker image rm "$old_image"
+```
+
 ## 目录布局
 
 - `sources/`：保存共享依赖版本清单、源码拉取脚本、各平台构建脚本、LaneApp 的 LVGL 配置、固定的 MiniGUI 源码归档，以及遗留 ARM 工具链压缩包。

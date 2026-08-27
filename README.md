@@ -4,6 +4,60 @@ Chinese README: [README.zh-CN.md](README.zh-CN.md)
 
 These Dockerfiles are the build-image definitions used by local verification, CI, and the legacy VisualGDB debug container.
 
+## Published images
+
+The following seven image repositories publish a usable `latest` tag on GHCR. The container platform is the architecture used to run the build container; the build target column describes the binaries produced by the toolchain inside it.
+
+| Compose target | Published image | Build target and intended use | Container platform | Main-branch tags | Image size |
+| --- | --- | --- | --- | --- | --- |
+| `x86-legacy` (`x86legacy` in Compose) | `ghcr.io/iotsharp/pcct-build-x86-legacy` | Legacy Wheezy X86 debug environment and historical ARM + X86 VisualGDB workflow | `linux/386` | `latest`, `sha-<commit>` | Inspect the pulled image |
+| `x86` | `ghcr.io/iotsharp/pcct-build-x86` | Native LaneApp i386 build and verification | `linux/386` | `latest`, `sha-<commit>` | Inspect the pulled image |
+| `arm` | `ghcr.io/iotsharp/pcct-build-arm` | ARM32 EABI5 soft-float cross build for the glibc 2.13/ARMv4T-compatible baseline | `linux/amd64` | `latest`, `sha-<commit>` | Inspect the pulled image |
+| `x64` | `ghcr.io/iotsharp/pcct-build-x64` | Native X86-64 build with the aligned dependency and recognition stack | `linux/amd64` | `latest`, `sha-<commit>` | Inspect the pulled image |
+| `arm64` | `ghcr.io/iotsharp/pcct-build-arm64` | AArch64 cross build with the aligned dependency and recognition stack | `linux/amd64` | `latest`, `sha-<commit>` | Inspect the pulled image |
+| `loongson` | `ghcr.io/iotsharp/pcct-build-loongson` | LoongArch64/LA64 cross build with the aligned dependency and recognition stack | `linux/amd64` | `latest`, `sha-<commit>` | Inspect the pulled image |
+| `centos79` | `ghcr.io/iotsharp/pcct-build-centos79` | Native X86-64 compatibility build for CentOS 7.9.2009 and glibc 2.17 | `linux/amd64` | `latest`, `7.9`, `7.9.2009`, `sha-<commit>` | Inspect the pulled image |
+
+Pull all seven current images once:
+
+```sh
+docker pull ghcr.io/iotsharp/pcct-build-x86-legacy:latest
+docker pull ghcr.io/iotsharp/pcct-build-x86:latest
+docker pull ghcr.io/iotsharp/pcct-build-arm:latest
+docker pull ghcr.io/iotsharp/pcct-build-x64:latest
+docker pull ghcr.io/iotsharp/pcct-build-arm64:latest
+docker pull ghcr.io/iotsharp/pcct-build-loongson:latest
+docker pull ghcr.io/iotsharp/pcct-build-centos79:latest
+```
+
+GHCR package visibility is managed separately from the successful image push.
+If a package returns `unauthorized` or `denied`, either authenticate with an
+account whose token has `read:packages`, or have a package administrator make
+that package public. Do not treat the access error as a missing build or change
+the official image name.
+
+After pulling, inspect the local architecture and Docker `.Size` value in bytes rather than relying on a documented estimate:
+
+```sh
+docker image inspect --format '{{index .RepoTags 0}} {{.Architecture}} {{.Size}}' \
+  ghcr.io/iotsharp/pcct-build-x86-legacy:latest \
+  ghcr.io/iotsharp/pcct-build-x86:latest \
+  ghcr.io/iotsharp/pcct-build-arm:latest \
+  ghcr.io/iotsharp/pcct-build-x64:latest \
+  ghcr.io/iotsharp/pcct-build-arm64:latest \
+  ghcr.io/iotsharp/pcct-build-loongson:latest \
+  ghcr.io/iotsharp/pcct-build-centos79:latest
+```
+
+To remove an old local image, first list the installed tags, then enter one complete `repository:tag` reference. This removes only that tag. Do not use `docker image prune`, repository-wide deletion, or wildcard-generated removal lists when retaining `latest` and other published tags matters.
+
+```sh
+docker image ls --format 'table {{.Repository}}\t{{.Tag}}\t{{.ID}}' 'ghcr.io/iotsharp/pcct-build-*'
+printf 'Exact repository:tag to remove: '
+IFS= read -r old_image
+docker image inspect "$old_image" >/dev/null && docker image rm "$old_image"
+```
+
 Image layout:
 
 - `sources/` stores the shared dependency version manifest, source-fetch helpers, target build scripts, the LaneApp LVGL profile, the pinned MiniGUI source archive, and the legacy ARM toolchain bundles.
