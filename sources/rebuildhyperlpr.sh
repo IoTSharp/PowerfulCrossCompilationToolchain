@@ -34,6 +34,12 @@ if [ "$PCCT_TARGET" = "arm" ]; then
     cxx_runtime_libs="/usr/lib/gcc-cross/arm-linux-gnueabi/5/libstdc++.a -static-libgcc"
 fi
 
+opencv_static_libs="-lopencv_imgproc -lopencv_core"
+opencv_tegra_hal="$PCCT_LIBDIR/opencv4/3rdparty/libtegra_hal.a"
+if [ -f "$opencv_tegra_hal" ]; then
+    opencv_static_libs="$opencv_static_libs -L$PCCT_LIBDIR/opencv4/3rdparty -l:libtegra_hal.a"
+fi
+
 # The LaneApp extensions keep upstream file loading and recognition intact
 # while adding an embedded:// resolver and an extend-only observation ABI.
 # HyperLPR stores this one source file with CRLF; normalize the extracted copy
@@ -231,7 +237,7 @@ Description: LaneApp $PCCT_TARGET static HyperLPR3 profile with embedded models 
 Version: $HYPERLPR_VERSION
 Cflags: -I\${includedir}
 Libs: -L\${libdir} -lhyperlpr3
-Libs.private: -Wl,--whole-archive -lMNN -Wl,--no-whole-archive -lopencv_imgproc -lopencv_core -l:libz.a -pthread -ldl -lm $cxx_runtime_libs -lrt
+Libs.private: -Wl,--whole-archive -lMNN -Wl,--no-whole-archive $opencv_static_libs -l:libz.a -pthread -ldl -lm $cxx_runtime_libs -lrt
 EOF
 
 license_dir="$PCCT_PREFIX/share/licenses/laneapp-hyperlpr3"

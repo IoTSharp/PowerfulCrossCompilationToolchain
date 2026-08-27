@@ -144,18 +144,20 @@ int main(void)
 {
     mbedtls_ssl_context tls;
     libusb_context *usb = NULL;
+    int peer_initialized = 0;
+    int usb_initialized = 0;
     int result;
     mbedtls_ssl_init(&tls);
     result = curl_global_init(CURL_GLOBAL_DEFAULT);
     xmlInitParser();
     avformat_network_init();
-    if (result == 0) result = peer_init();
+    if (result == 0) peer_initialized = peer_init() == 0;
     if (result == 0 && PQlibVersion() <= 0) result = 1;
-    if (result == 0) result = libusb_init(&usb);
+    if (result == 0) usb_initialized = libusb_init(&usb) == 0;
     lv_init();
     lv_deinit();
-    if (usb != NULL) libusb_exit(usb);
-    peer_deinit();
+    if (usb_initialized) libusb_exit(usb);
+    if (peer_initialized) peer_deinit();
     avformat_network_deinit();
     xmlCleanupParser();
     curl_global_cleanup();
