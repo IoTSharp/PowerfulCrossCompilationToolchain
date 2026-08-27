@@ -96,3 +96,9 @@ fi
 
 make -j"$(pcct_nproc)"
 make install
+
+# glibc before 2.17 keeps clock_gettime in librt. Export it from libavutil so
+# consumers of the legacy ARM sysroot can link FFmpeg statically via pkg-config.
+if [ "$PCCT_TARGET" = "arm" ]; then
+    sed -i '/^Libs.private:/ s/$/ -lrt/' "$PCCT_PKGCONFIGDIR/libavutil.pc"
+fi

@@ -15,10 +15,27 @@ pcct_setup_target "$1"
 
 workdir=/tmp/pcct-aligned-static-smoke
 pkg_config=${PKG_CONFIG:-pkg-config}
-readelf=readelf
-if [ -n "$PCCT_CROSS_PREFIX" ] && command -v "${PCCT_CROSS_PREFIX}readelf" >/dev/null 2>&1; then
-    readelf=${PCCT_CROSS_PREFIX}readelf
+readelf=$(command -v readelf)
+if [ -n "$PCCT_CROSS_PREFIX" ]; then
+    target_readelf=${PCCT_CROSS_PREFIX}readelf
+    if command -v "$target_readelf" >/dev/null 2>&1 && \
+       "$target_readelf" --version >/dev/null 2>&1; then
+        readelf=$target_readelf
+    fi
 fi
+
+pcct_assert_no_needed() {
+    binary=$1
+    pattern=$2
+    description=$3
+    needed=$("$readelf" -d "$binary" 2>/dev/null | grep NEEDED || true)
+    forbidden=$(printf '%s\n' "$needed" | grep -E "$pattern" || true)
+    if [ -n "$forbidden" ]; then
+        echo "$description" >&2
+        printf '%s\n' "$forbidden" >&2
+        exit 1
+    fi
+}
 
 rm -rf "$workdir"
 mkdir -p "$workdir"
@@ -106,9 +123,12 @@ for metadata in \
     "$PCCT_PREFIX/share/licenses/laneapp-hyperlpr3/MODEL-SHA256SUMS" \
     "$PCCT_PREFIX/share/licenses/laneapp-hyperlpr3/PATCH-SHA256SUMS" \
     "$PCCT_PREFIX/share/licenses/laneapp-hyperlpr3/CAPABILITIES.txt" \
-    "$PCCT_PREFIX/share/licenses/laneapp-nanodet/MODEL-SHA256SUMS"; do
+    "$PCCT_PREFIX/share/licenses/laneapp-nanodet/MODEL-SHA256SUMS" \
+    "$PCCT_PREFIX/share/licenses/MNN-$MNN_VERSION/PATCH-SHA256SUMS"; do
     test -f "$metadata"
 done
+grep -qx "$MNN_TOOLCHAIN_PATCH_SHA256  mnn-2.2.0-toolchain-compat.patch" \
+    "$PCCT_PREFIX/share/licenses/MNN-$MNN_VERSION/PATCH-SHA256SUMS"
 
 cat > "$workdir/dependency-smoke.c" <<'EOF'
 #include <curl/curl.h>
@@ -150,11 +170,9 @@ EOF
         laneapp-webrtc laneapp-lvgl libcurl libxml-2.0 libpq libusb-1.0 mbedtls)
 pcct_assert_target_file "$workdir/dependency-smoke"
 
-if "$readelf" -d "$workdir/dependency-smoke" | grep NEEDED | \
-    grep -Eq 'lib(peer|avformat|avcodec|avutil|swscale|curl|xml2|srtp|mbedtls|pq|usb|laneapp|z\.so)'; then
-    echo "dependency smoke retained a third-party shared dependency" >&2
-    exit 1
-fi
+pcct_assert_no_needed "$workdir/dependency-smoke" \
+    'lib(peer|avformat|avcodec|avutil|swscale|curl|xml2|srtp|mbedtls|pq|usb|laneapp|z\.so)' \
+    "dependency smoke retained a third-party shared dependency"
 
 cat > "$workdir/webrtc-smoke.c" <<'EOF'
 #include <libavformat/avformat.h>
@@ -174,11 +192,9 @@ EOF
     $("$pkg_config" --cflags --static --libs laneapp-webrtc)
 pcct_assert_target_file "$workdir/webrtc-smoke"
 
-if "$readelf" -d "$workdir/webrtc-smoke" | grep NEEDED | \
-    grep -Eq 'lib(peer|avformat|avcodec|avutil|swscale|srtp|mbedtls|z\.so)'; then
-    echo "WebRTC smoke retained a third-party shared dependency" >&2
-    exit 1
-fi
+pcct_assert_no_needed "$workdir/webrtc-smoke" \
+    'lib(peer|avformat|avcodec|avutil|swscale|srtp|mbedtls|z\.so)' \
+    "WebRTC smoke retained a third-party shared dependency"
 
 cat > "$workdir/hyperlpr-smoke.cpp" <<'EOF'
 #include <hyper_lpr_sdk.h>
@@ -230,11 +246,9 @@ EOF
 pcct_assert_target_file "$workdir/nanodet-smoke"
 
 for binary in hyperlpr-smoke nanodet-smoke; do
-    if "$readelf" -d "$workdir/$binary" | grep NEEDED | \
-        grep -Eq 'lib(hyperlpr|laneapp-nanodet|MNN|opencv|stdc\+\+|gcc_s|gomp)\.so'; then
-        echo "$binary retained a recognition or C++ runtime shared dependency" >&2
-        exit 1
-    fi
+    pcct_assert_no_needed "$workdir/$binary" \
+        'lib(hyperlpr|laneapp-nanodet|MNN|opencv|stdc\+\+|gcc_s|gomp)\.so' \
+        "$binary retained a recognition or C++ runtime shared dependency"
 done
 
 if [ -n "${PCCT_MAX_GLIBC:-}" ]; then

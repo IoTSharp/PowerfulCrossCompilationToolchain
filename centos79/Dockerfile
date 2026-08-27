@@ -91,6 +91,16 @@ RUN rm -f /etc/yum.repos.d/*.repo && \
     yum clean all && \
     rm -rf /var/cache/yum
 
+# CentOS exposes both libz.so and libz.a. Keep pkg-config consumers on the
+# image's static dependency contract by overriding only zlib's link metadata.
+RUN zlib_pc="$(pkg-config --variable=pcfiledir zlib)/zlib.pc" && \
+    test -f "$zlib_pc" && \
+    test -f /usr/lib64/libz.a && \
+    mkdir -p /usr/local/lib/pkgconfig && \
+    cp "$zlib_pc" /usr/local/lib/pkgconfig/zlib.pc && \
+    sed -i 's/-lz\([[:space:]]\|$\)/-l:libz.a\1/g' \
+        /usr/local/lib/pkgconfig/zlib.pc
+
 ENV DEVTOOLSET_ROOT=/opt/rh/devtoolset-7/root \
     PATH=/opt/rh/devtoolset-7/root/usr/bin:${PATH} \
     LD_LIBRARY_PATH=/opt/rh/devtoolset-7/root/usr/lib64 \
@@ -137,6 +147,7 @@ RUN chmod +x /work/*.sh && \
     /work/rebuildnanodet.sh x64 && \
     find /usr/local/lib/pkgconfig -type f -name '*.pc' \
         -exec sed -i 's/-lz\([[:space:]]\|$\)/-l:libz.a\1/g' {} + && \
+    grep -Eq '^Libs:.*-l:libz\.a' /usr/local/lib/pkgconfig/zlib.pc && \
     /work/verify-aligned-static.sh x64 && \
     /work/verify-centos79.sh && \
     rm -rf /dist /tmp/pcct-*

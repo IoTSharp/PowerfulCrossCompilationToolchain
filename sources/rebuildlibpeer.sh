@@ -70,7 +70,7 @@ Name: laneapp-webrtc
 Description: Static LaneApp libpeer and network-enabled FFmpeg runtime
 Version: 1.0
 Cflags: -I\${includedir}/libpeer
-Libs: -L\${libdir} -l:libpeer.a -l:libsrtp2.a -l:libavformat.a -l:libavcodec.a -l:libswscale.a -l:libavutil.a -l:libmbedtls.a -l:libmbedx509.a -l:libmbedcrypto.a $ffmpeg_platform_libs -pthread -ldl -lm -l:libz.a
+Libs: -L\${libdir} -l:libpeer.a -l:libsrtp2.a -l:libavformat.a -l:libavcodec.a -l:libswscale.a -l:libavutil.a -l:libmbedtls.a -l:libmbedx509.a -l:libmbedcrypto.a $ffmpeg_platform_libs -pthread -ldl -lm -lrt -l:libz.a
 EOF
 
 test -f "$PCCT_LIBDIR/libpeer.a"

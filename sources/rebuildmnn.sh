@@ -22,6 +22,10 @@ esac
 pcct_setup_target "$1"
 
 cmake_install_libdir=${PCCT_LIBDIR#"$PCCT_PREFIX"/}
+toolchain_patch="$SCRIPT_DIR/patches/mnn-2.2.0-toolchain-compat.patch"
+printf '%s  %s\n' "$MNN_TOOLCHAIN_PATCH_SHA256" "$toolchain_patch" | \
+    sha256sum -c -
+patch -p1 < "$toolchain_patch"
 
 # HyperLPR owns scheduling. MNN is therefore built as a CPU-only static engine
 # with both OpenMP and its internal worker pool disabled.
@@ -118,3 +122,5 @@ license_dir="$PCCT_PREFIX/share/licenses/MNN-$MNN_VERSION"
 mkdir -p "$license_dir"
 install -m 0644 "/dist/$MNN_LICENSE_ARCHIVE" "$license_dir/LICENSE.txt"
 install -m 0644 ../README.md "$license_dir/README.md"
+printf '%s  %s\n' "$MNN_TOOLCHAIN_PATCH_SHA256" \
+    "mnn-2.2.0-toolchain-compat.patch" > "$license_dir/PATCH-SHA256SUMS"
