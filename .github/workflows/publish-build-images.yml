@@ -11,8 +11,13 @@ on:
       - "x64/**"
       - "x86/**"
       - "x86Legacy/**"
+      - "centos79/**"
       - "rebuildcurl.sh"
   workflow_dispatch:
+
+concurrency:
+  group: publish-build-images-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   publish:
@@ -60,6 +65,12 @@ jobs:
             cache_scope: pcct-build-loongson
             container_platform: linux/amd64
             build_args: PCCT_USE_TUNA_MIRROR=0
+          - name: centos79
+            file: centos79/Dockerfile
+            image: ghcr.io/iotsharp/pcct-build-centos79
+            cache_scope: pcct-build-centos79
+            container_platform: linux/amd64
+            build_args: PCCT_CENTOS_VAULT=https://archive.kernel.org/centos-vault
     steps:
       - uses: actions/checkout@v5
 
@@ -87,6 +98,10 @@ jobs:
             echo "$SHA_TAG"
             if [[ "${GITHUB_REF}" == "refs/heads/main" || "${GITHUB_REF}" == "refs/heads/master" ]]; then
               echo "${{ matrix.image }}:latest"
+              if [[ "${{ matrix.name }}" == "centos79" ]]; then
+                echo "${{ matrix.image }}:7.9"
+                echo "${{ matrix.image }}:7.9.2009"
+              fi
             fi
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"

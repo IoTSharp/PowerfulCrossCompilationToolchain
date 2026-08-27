@@ -64,6 +64,7 @@ export CXXFLAGS="${CXXFLAGS:-} -O2 -fPIC"
     --includedir="$PCCT_INCLUDEDIR" \
     --disable-shared \
     --enable-static \
+    --enable-freetype-config \
     --with-pic \
     --with-zlib=no \
     --with-bzip2=no \

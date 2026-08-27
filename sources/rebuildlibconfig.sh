@@ -13,6 +13,7 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 pcct_setup_target "$1"
 pcct_reset_build_tree
 pcct_bootstrap_autotools
+pcct_refresh_config_scripts aux-build
 
 export CFLAGS="${CFLAGS:-} -O2 -fPIC"
 export CXXFLAGS="${CXXFLAGS:-} -O2 -fPIC"

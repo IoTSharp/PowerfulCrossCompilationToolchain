@@ -143,7 +143,7 @@ echo   --cmd COMMAND          Build command to run inside the containers. Defaul
 echo   --help                 Show this help
 echo.
 echo Targets:
-echo   all, x86legacy, x86, arm, x64, arm64, loongson
+echo   all, x86legacy, x86, arm, x64, arm64, loongson, centos79
 echo.
 echo Examples:
 echo   %~nx0 D:\work\LaneApp

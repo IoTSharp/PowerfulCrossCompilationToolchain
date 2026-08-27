@@ -2,8 +2,8 @@
 
 set -eu
 
-if [ "$#" -ne 1 ] || [ "$1" != "x86" ]; then
-    echo "usage: $0 x86" >&2
+if [ "$#" -ne 1 ]; then
+    echo "usage: $0 <x86|x64>" >&2
     exit 1
 fi
 
@@ -11,7 +11,15 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 . "$SCRIPT_DIR/build-common.sh"
 . "$SCRIPT_DIR/dependency-versions.sh"
 
-pcct_setup_target x86
+case "$1" in
+    x86|x64|X64) ;;
+    *)
+        echo "usage: $0 <x86|x64>" >&2
+        exit 1
+        ;;
+esac
+
+pcct_setup_target "$1"
 
 # CMake 3.14 is built in the image before the recognition dependencies; no
 # package manager or network access is needed by later dependency builds.

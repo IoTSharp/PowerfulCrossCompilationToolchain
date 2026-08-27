@@ -5,7 +5,7 @@
 - Upstream: `szad670401/HyperLPR`
 - Revision: `9307450f7b7915be18f23a539ec05b41fe6629f4`
 - PCCT package version: `3.0.1.9307450.1`
-- Targets: X86/i386 and legacy ARM32 EABI5 soft-float
+- Targets: X86/i386, X64, legacy ARM32 EABI5 soft-float, ARM64, and LA64
 - Runtime shape: static HyperLPR3, MNN, and OpenCV archives with six read-only
   embedded model objects
 
@@ -54,7 +54,7 @@ inference call through the observation API. The ARM image cross-links the same
 public API and verifies the public ABI sizes, EABI5 soft-float output, glibc
 2.13 ceiling, pkg-config capability variables, patch and model manifests, both
 old and new archive symbols, and the absence of recognition or C++ runtime
-shared dependencies. Both profiles reject loose runtime model files.
+shared dependencies. Every aligned profile rejects loose runtime model files.
 
 When the observation ABI changes, update all of the following together:
 

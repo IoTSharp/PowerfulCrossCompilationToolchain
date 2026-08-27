@@ -16,7 +16,7 @@ Options:
   --help                 Show this help
 
 Targets:
-  all, x86legacy, x86, arm, x64, arm64, loongson
+  all, x86legacy, x86, arm, x64, arm64, loongson, centos79
 
 Examples:
   sh ./compose-up-all.sh /work/LaneApp

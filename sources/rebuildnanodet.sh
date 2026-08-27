@@ -9,6 +9,12 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 pcct_setup_target "${1:-}"
 
 cxx_runtime_libs=
+if [ "${PCCT_FORCE_STATIC_CXX:-0}" = "1" ]; then
+    cxx_runtime_libs="-static-libstdc++ -static-libgcc"
+elif [ "${PCCT_FORCE_STATIC_CXX:-0}" != "0" ]; then
+    echo "PCCT_FORCE_STATIC_CXX must be 0 or 1" >&2
+    exit 1
+fi
 if [ "$PCCT_TARGET" = "arm" ]; then
     # Keep the modern C++ runtime static while resolving POSIX clocks from the
     # deployed EABI sysroot's legacy librt.
@@ -16,9 +22,9 @@ if [ "$PCCT_TARGET" = "arm" ]; then
 fi
 
 case "$PCCT_TARGET" in
-    x86|arm) ;;
+    x86|x64|X64|arm|arm64|ARM64|la64|LA64) ;;
     *)
-        echo "NanoDet is supported only by the x86 and arm static profiles" >&2
+        echo "NanoDet is unsupported for target $PCCT_TARGET" >&2
         exit 1
         ;;
 esac
@@ -42,10 +48,7 @@ cp "$model_path" "$build_dir/$NANODET_MODEL_ARCHIVE"
     "$OBJCOPY" \
         --rename-section .data=.rodata,alloc,load,readonly,data,contents \
         nanodet-model.o
-    case "$PCCT_TARGET" in
-        x86) file nanodet-model.o | grep -q 'ELF 32-bit.*Intel 80386' ;;
-        arm) file nanodet-model.o | grep -q 'ELF 32-bit.*ARM' ;;
-    esac
+    pcct_assert_target_arch nanodet-model.o
 )
 
 cat > "$build_dir/nanodet-model.c" <<'EOF'
@@ -99,7 +102,7 @@ install -m 0644 "$build_dir/laneapp_nanodet_model.h" \
 cat > "$PCCT_PKGCONFIGDIR/laneapp-nanodet.pc" <<EOF
 prefix=$PCCT_PREFIX
 includedir=\${prefix}/include
-libdir=\${prefix}/lib
+libdir=$PCCT_LIBDIR
 
 Name: laneapp-nanodet
 Description: LaneApp $PCCT_TARGET static NanoDet-Plus-m-416 profile with embedded MNN model

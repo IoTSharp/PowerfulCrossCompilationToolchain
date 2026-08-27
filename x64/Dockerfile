@@ -10,7 +10,10 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 RUN chmod +x /work/*.sh && \
-    /work/fetch-github-sources.sh /dist curl freetype libusb sqlite ffmpeg lvgl
+    /work/fetch-github-sources.sh /dist \
+        curl libxml2 freetype libusb sqlite ffmpeg lvgl postgresql \
+        libpeer libsrtp mbedtls laneapp-lvgl \
+        opencv mnn mnn-license hyperlpr nanodet-model nanodet-license
 
 FROM debian:trixie-slim
 
@@ -63,6 +66,7 @@ RUN printf '%s\n' \
                file \
                flex \
                bison \
+               cmake \
                libconfig-dev \
                libjpeg-dev \
                libpq-dev \
@@ -72,9 +76,12 @@ RUN printf '%s\n' \
                libtool-bin \
                m4 \
                make \
+               patch \
                perl \
                pkg-config \
+               python3 \
                wget \
+               xz-utils \
                zlib1g-dev; then \
             break; \
         fi; \
@@ -91,16 +98,38 @@ COPY sources/build-common.sh /work/build-common.sh
 COPY sources/build-selected-deps.sh /work/build-selected-deps.sh
 COPY sources/dependency-versions.sh /work/dependency-versions.sh
 COPY sources/lv_conf.h /work/lv_conf.h
+COPY sources/lane2nd-lv_conf.h /work/lane2nd-lv_conf.h
 COPY sources/rebuildffmpeg.sh /work/rebuildffmpeg.sh
 COPY sources/rebuildfreetype.sh /work/rebuildfreetype.sh
+COPY sources/rebuildhyperlpr.sh /work/rebuildhyperlpr.sh
+COPY sources/rebuildlaneapp-lvgl.sh /work/rebuildlaneapp-lvgl.sh
+COPY sources/rebuildlibpeer.sh /work/rebuildlibpeer.sh
 COPY sources/rebuildlibusb.sh /work/rebuildlibusb.sh
+COPY sources/rebuildlibxml2.sh /work/rebuildlibxml2.sh
 COPY sources/rebuildlvgl.sh /work/rebuildlvgl.sh
+COPY sources/rebuildmbedtls.sh /work/rebuildmbedtls.sh
+COPY sources/rebuildminigui.sh /work/rebuildminigui.sh
+COPY sources/rebuildmnn.sh /work/rebuildmnn.sh
+COPY sources/rebuildnanodet.sh /work/rebuildnanodet.sh
+COPY sources/rebuildopencv.sh /work/rebuildopencv.sh
+COPY sources/rebuildpostgresql.sh /work/rebuildpostgresql.sh
 COPY sources/rebuildsqlite.sh /work/rebuildsqlite.sh
+COPY sources/verify-aligned-static.sh /work/verify-aligned-static.sh
+COPY sources/patches/ /work/patches/
 COPY --from=fetcher /dist/ /dist/
+COPY sources/minigui2.0.4-eb30dfdc.tar.gz /work/minigui2.0.4-eb30dfdc.tar.gz
 
 RUN chmod +x /work/*.sh && \
-    /work/build-selected-deps.sh x64 freetype sqlite libusb curl ffmpeg lvgl && \
-    rm -rf /dist
+    /work/build-selected-deps.sh x64 mbedtls libxml2 freetype && \
+    /work/rebuildminigui.sh x64 && \
+    /work/build-selected-deps.sh x64 \
+        sqlite libusb curl ffmpeg postgresql libpeer lvgl laneapp-lvgl \
+        opencv mnn hyperlpr && \
+    /work/rebuildnanodet.sh x64 && \
+    find /usr/local/lib/pkgconfig -type f -name '*.pc' \
+        -exec sed -i 's/-lz\([[:space:]]\|$\)/-l:libz.a\1/g' {} + && \
+    /work/verify-aligned-static.sh x64 && \
+    rm -rf /dist /tmp/pcct-*
 
 WORKDIR /LaneApp
 

@@ -38,3 +38,10 @@ services:
       dockerfile: ./loongson/Dockerfile
       args:
         PCCT_USE_TUNA_MIRROR: ${PCCT_USE_TUNA_MIRROR:-1}
+
+  centos79:
+    build:
+      context: .
+      dockerfile: ./centos79/Dockerfile
+      args:
+        PCCT_CENTOS_VAULT: ${PCCT_CENTOS_VAULT:-https://mirrors.aliyun.com/centos-vault}

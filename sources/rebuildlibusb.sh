@@ -13,6 +13,9 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 pcct_setup_target "$1"
 pcct_reset_build_tree
 pcct_bootstrap_autotools
+if [ "$PCCT_TARGET" = "la64" ] || [ "$PCCT_TARGET" = "LA64" ]; then
+    pcct_refresh_config_scripts .
+fi
 
 export CFLAGS="${CFLAGS:-} -O2 -fPIC"
 export CXXFLAGS="${CXXFLAGS:-} -O2 -fPIC"

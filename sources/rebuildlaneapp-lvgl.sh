@@ -2,8 +2,8 @@
 
 set -eu
 
-if [ "$#" -ne 1 ] || [ "$1" != "x86" ]; then
-    echo "usage: $0 x86" >&2
+if [ "$#" -ne 1 ]; then
+    echo "usage: $0 <x86|x64|arm|arm64|la64>" >&2
     exit 1
 fi
 
@@ -11,7 +11,7 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 . "$SCRIPT_DIR/build-common.sh"
 . "$SCRIPT_DIR/dependency-versions.sh"
 
-pcct_setup_target x86
+pcct_setup_target "$1"
 
 cp "$SCRIPT_DIR/lane2nd-lv_conf.h" ./lv_conf.h
 tmpdir=$(mktemp -d)

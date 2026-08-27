@@ -14,7 +14,9 @@ RUN apt-get update && \
 
 RUN chmod +x /work/*.sh && \
     /work/fetch-github-sources.sh /dist \
-        libconfig jpeg freetype sqlite libusb mbedtls curl postgresql
+        libconfig jpeg curl libxml2 freetype libusb sqlite ffmpeg postgresql \
+        libpeer libsrtp mbedtls laneapp-lvgl \
+        opencv mnn mnn-license hyperlpr nanodet-model nanodet-license
 
 FROM debian:trixie-slim
 
@@ -97,6 +99,8 @@ RUN cd /tmp && \
 COPY sources/build-common.sh /work/build-common.sh
 COPY sources/build-selected-deps.sh /work/build-selected-deps.sh
 COPY sources/dependency-versions.sh /work/dependency-versions.sh
+COPY sources/lane2nd-lv_conf.h /work/lane2nd-lv_conf.h
+COPY sources/patches/ /work/patches/
 COPY --from=fetcher /dist/ /dist/
 COPY sources/minigui2.0.4-eb30dfdc.tar.gz /work/minigui2.0.4-eb30dfdc.tar.gz
 
@@ -121,6 +125,8 @@ COPY --chmod=0755 sources/rebuildjpeg.sh /work/rebuildjpeg.sh
 RUN /work/build-selected-deps.sh la64 jpeg
 COPY --chmod=0755 sources/rebuildfreetype.sh /work/rebuildfreetype.sh
 RUN /work/build-selected-deps.sh la64 freetype
+COPY --chmod=0755 sources/rebuildlibxml2.sh /work/rebuildlibxml2.sh
+RUN /work/build-selected-deps.sh la64 libxml2
 COPY --chmod=0755 sources/rebuildsqlite.sh /work/rebuildsqlite.sh
 RUN /work/build-selected-deps.sh la64 sqlite
 COPY --chmod=0755 sources/rebuildlibusb.sh /work/rebuildlibusb.sh
@@ -132,14 +138,31 @@ COPY --chmod=0755 sources/rebuildmbedtls.sh /work/rebuildmbedtls.sh
 RUN /work/build-selected-deps.sh la64 mbedtls
 COPY --chmod=0755 rebuildcurl.sh /work/rebuildcurl.sh
 RUN /work/build-selected-deps.sh la64 curl
+COPY --chmod=0755 sources/rebuildffmpeg.sh /work/rebuildffmpeg.sh
+RUN /work/build-selected-deps.sh la64 ffmpeg
 COPY --chmod=0755 sources/rebuildpostgresql.sh /work/rebuildpostgresql.sh
 RUN /work/build-selected-deps.sh la64 postgresql
+COPY --chmod=0755 sources/rebuildlibpeer.sh /work/rebuildlibpeer.sh
+RUN /work/build-selected-deps.sh la64 libpeer
+COPY --chmod=0755 sources/rebuildlaneapp-lvgl.sh /work/rebuildlaneapp-lvgl.sh
+RUN /work/build-selected-deps.sh la64 laneapp-lvgl
 COPY --chmod=0755 sources/rebuildminigui.sh /work/rebuildminigui.sh
 RUN /work/rebuildminigui.sh la64
 
+COPY --chmod=0755 sources/rebuildopencv.sh /work/rebuildopencv.sh
+RUN /work/build-selected-deps.sh la64 opencv
+COPY --chmod=0755 sources/rebuildmnn.sh /work/rebuildmnn.sh
+RUN /work/build-selected-deps.sh la64 mnn
+COPY --chmod=0755 sources/rebuildhyperlpr.sh /work/rebuildhyperlpr.sh
+RUN /work/build-selected-deps.sh la64 hyperlpr
+COPY --chmod=0755 sources/rebuildnanodet.sh /work/rebuildnanodet.sh
+RUN /work/rebuildnanodet.sh la64
+
+COPY --chmod=0755 sources/verify-aligned-static.sh /work/verify-aligned-static.sh
 COPY --chmod=0755 sources/verify-loongarch64.sh /work/verify-loongarch64.sh
 RUN find /opt/cross-tools/target/usr/lib64/pkgconfig -type f -name '*.pc' \
         -exec sed -i 's/-lz\([[:space:]]\|$\)/-l:libz.a\1/g' {} + && \
+    /work/verify-aligned-static.sh la64 && \
     /work/verify-loongarch64.sh && \
     rm -rf /dist /tmp/pcct-*
 

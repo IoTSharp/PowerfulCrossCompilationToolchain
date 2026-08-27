@@ -16,7 +16,8 @@ RUN apt-get update && \
 
 RUN chmod +x /work/*.sh && \
     /work/fetch-github-sources.sh /dist \
-        curl freetype libusb sqlite ffmpeg lvgl postgresql \
+        curl libxml2 freetype libusb sqlite ffmpeg lvgl postgresql \
+        libpeer libsrtp mbedtls laneapp-lvgl \
         cmake opencv mnn mnn-license hyperlpr nanodet-model nanodet-license
 
 FROM --platform=${BASE_PLATFORM} ubuntu:16.04
@@ -51,14 +52,19 @@ COPY sources/build-common.sh /work/build-common.sh
 COPY sources/build-selected-deps.sh /work/build-selected-deps.sh
 COPY sources/dependency-versions.sh /work/dependency-versions.sh
 COPY sources/lv_conf.h /work/lv_conf.h
+COPY sources/lane2nd-lv_conf.h /work/lane2nd-lv_conf.h
 COPY sources/pcct-arm-gcc54-wrapper /usr/local/bin/pcct-arm-gcc54-wrapper
 COPY sources/pcct-arm-pkg-config /usr/local/bin/pcct-arm-pkg-config
 COPY sources/rebuildffmpeg.sh /work/rebuildffmpeg.sh
 COPY sources/rebuildfreetype.sh /work/rebuildfreetype.sh
 COPY sources/rebuildcmake.sh /work/rebuildcmake.sh
 COPY sources/rebuildhyperlpr.sh /work/rebuildhyperlpr.sh
+COPY sources/rebuildlaneapp-lvgl.sh /work/rebuildlaneapp-lvgl.sh
+COPY sources/rebuildlibpeer.sh /work/rebuildlibpeer.sh
 COPY sources/rebuildlibusb.sh /work/rebuildlibusb.sh
+COPY sources/rebuildlibxml2.sh /work/rebuildlibxml2.sh
 COPY sources/rebuildlvgl.sh /work/rebuildlvgl.sh
+COPY sources/rebuildmbedtls.sh /work/rebuildmbedtls.sh
 COPY sources/rebuildminigui.sh /work/rebuildminigui.sh
 COPY sources/rebuildmnn.sh /work/rebuildmnn.sh
 COPY sources/rebuildnanodet.sh /work/rebuildnanodet.sh
@@ -66,6 +72,7 @@ COPY sources/rebuildopencv.sh /work/rebuildopencv.sh
 COPY sources/rebuildsqlite.sh /work/rebuildsqlite.sh
 COPY sources/rebuildpostgresql.sh /work/rebuildpostgresql.sh
 COPY sources/verify-arm-gcc54.sh /work/verify-arm-gcc54.sh
+COPY sources/verify-aligned-static.sh /work/verify-aligned-static.sh
 COPY sources/patches/ /work/patches/
 COPY --from=fetcher /dist/ /dist/
 COPY sources/minigui2.0.4-eb30dfdc.tar.gz /work/minigui2.0.4-eb30dfdc.tar.gz
@@ -114,6 +121,7 @@ RUN set -e; \
         patch \
         perl \
         pkg-config \
+        python3 \
         wget \
         xz-utils && \
     retry apt-get install -y --no-install-recommends --fix-missing \
@@ -239,11 +247,16 @@ RUN env \
         LD=/usr/bin/ld NM=/usr/bin/nm RANLIB=/usr/bin/ranlib \
         STRIP=/usr/bin/strip OBJCOPY=/usr/bin/objcopy OBJDUMP=/usr/bin/objdump \
         /work/build-selected-deps.sh x86 cmake && \
-    /work/build-selected-deps.sh arm freetype && \
+    /work/build-selected-deps.sh arm mbedtls libxml2 freetype && \
     /work/rebuildminigui.sh arm && \
     /work/build-selected-deps.sh arm \
-        sqlite libusb curl ffmpeg lvgl postgresql opencv mnn hyperlpr && \
+        sqlite libusb curl ffmpeg postgresql libpeer lvgl laneapp-lvgl \
+        opencv mnn hyperlpr && \
     /work/rebuildnanodet.sh arm && \
+    find /work/toolchain_R2_EABI/usr/arm-unknown-linux-gnueabi/sysroot/usr/lib/pkgconfig \
+        -type f -name '*.pc' -exec sed -i \
+        's/-lz\([[:space:]]\|$\)/-l:libz.a\1/g' {} + && \
+    /work/verify-aligned-static.sh arm && \
     /work/verify-arm-gcc54.sh && \
     rm -rf /dist /tmp/pcct-*
 

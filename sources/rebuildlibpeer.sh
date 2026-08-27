@@ -2,8 +2,8 @@
 
 set -eu
 
-if [ "$#" -ne 1 ] || [ "$1" != "x86" ]; then
-    echo "usage: $0 x86" >&2
+if [ "$#" -ne 1 ]; then
+    echo "usage: $0 <x86|x64|arm|arm64|la64>" >&2
     exit 1
 fi
 
@@ -11,7 +11,12 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 . "$SCRIPT_DIR/build-common.sh"
 . "$SCRIPT_DIR/dependency-versions.sh"
 
-pcct_setup_target x86
+pcct_setup_target "$1"
+
+ffmpeg_platform_libs=
+if [ "$PCCT_TARGET" = "x86" ]; then
+    ffmpeg_platform_libs="-lva -lva-drm -ldrm"
+fi
 
 libsrtp_root=$(mktemp -d)
 objects_root=$(mktemp -d)
@@ -22,6 +27,7 @@ tar -xf "/dist/$LIBSRTP_ARCHIVE" -C "$libsrtp_root" --strip-components=1
 (
     cd "$libsrtp_root"
     test -x ./configure
+    pcct_refresh_config_scripts .
     CC="$CC" CFLAGS="-O2 -fPIC -std=gnu99" \
         ./configure \
             --host="$PCCT_HOST" \
@@ -61,10 +67,10 @@ includedir=$PCCT_INCLUDEDIR
 libdir=$PCCT_LIBDIR
 
 Name: laneapp-webrtc
-Description: Static LaneApp libpeer and RTSP FFmpeg runtime
+Description: Static LaneApp libpeer and network-enabled FFmpeg runtime
 Version: 1.0
 Cflags: -I\${includedir}/libpeer
-Libs: -L\${libdir} -l:libpeer.a -l:libsrtp2.a -l:libmbedtls.a -l:libmbedx509.a -l:libmbedcrypto.a -l:libavformat.a -l:libavcodec.a -l:libswscale.a -l:libavutil.a -lva -lva-drm -ldrm -pthread -ldl -lm -lz
+Libs: -L\${libdir} -l:libpeer.a -l:libsrtp2.a -l:libavformat.a -l:libavcodec.a -l:libswscale.a -l:libavutil.a -l:libmbedtls.a -l:libmbedx509.a -l:libmbedcrypto.a $ffmpeg_platform_libs -pthread -ldl -lm -l:libz.a
 EOF
 
 test -f "$PCCT_LIBDIR/libpeer.a"

@@ -3,7 +3,7 @@
 set -eu
 
 if [ "$#" -ne 1 ]; then
-    echo "usage: $0 <x86|arm>" >&2
+    echo "usage: $0 <x86|x64|arm|arm64|la64>" >&2
     exit 1
 fi
 
@@ -12,9 +12,9 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 . "$SCRIPT_DIR/dependency-versions.sh"
 
 case "$1" in
-    x86|arm) ;;
+    x86|x64|X64|arm|arm64|ARM64|la64|LA64) ;;
     *)
-        echo "usage: $0 <x86|arm>" >&2
+        echo "usage: $0 <x86|x64|arm|arm64|la64>" >&2
         exit 1
         ;;
 esac
@@ -22,6 +22,12 @@ esac
 pcct_setup_target "$1"
 
 cxx_runtime_libs=
+if [ "${PCCT_FORCE_STATIC_CXX:-0}" = "1" ]; then
+    cxx_runtime_libs="-static-libstdc++ -static-libgcc"
+elif [ "${PCCT_FORCE_STATIC_CXX:-0}" != "0" ]; then
+    echo "PCCT_FORCE_STATIC_CXX must be 0 or 1" >&2
+    exit 1
+fi
 if [ "$PCCT_TARGET" = "arm" ]; then
     # Resolve GCC 5's static C++ runtime before the legacy sysroot librt so
     # clock_gettime keeps the deployed GLIBC_2.4 symbol version.
@@ -118,10 +124,7 @@ done
         "$OBJCOPY" \
             --rename-section .data=.rodata,alloc,load,readonly,data,contents \
             "$build_dir/model-$model_name.o"
-        case "$PCCT_TARGET" in
-            x86) file "$build_dir/model-$model_name.o" | grep -q 'ELF 32-bit.*Intel 80386' ;;
-            arm) file "$build_dir/model-$model_name.o" | grep -q 'ELF 32-bit.*ARM' ;;
-        esac
+        pcct_assert_target_arch "$build_dir/model-$model_name.o"
     done
 )
 
@@ -206,8 +209,7 @@ EOF
 if [ "$PCCT_IS_CROSS" = "0" ]; then
     "$build_dir/detection-observation-smoke"
 else
-    file "$build_dir/detection-observation-smoke" | \
-        grep -q 'ELF 32-bit LSB.*ARM.*EABI5'
+    pcct_assert_target_file "$build_dir/detection-observation-smoke"
 fi
 
 mkdir -p "$PCCT_LIBDIR" "$PCCT_INCLUDEDIR" "$PCCT_PKGCONFIGDIR"
@@ -220,7 +222,7 @@ install -m 0644 cpp/c_api/hyper_lpr_sdk_observation.h \
 cat > "$PCCT_PKGCONFIGDIR/laneapp-hyperlpr3.pc" <<EOF
 prefix=$PCCT_PREFIX
 includedir=\${prefix}/include
-libdir=\${prefix}/lib
+libdir=$PCCT_LIBDIR
 detection_observation_abi=$HYPERLPR_OBSERVATION_ABI_VERSION
 detection_observation_max=$HYPERLPR_OBSERVATION_MAX
 

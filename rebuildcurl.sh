@@ -36,6 +36,12 @@ COMMON_CURL_ARGS="\
 export CFLAGS="${CFLAGS:-} -O2 -fPIC"
 export CXXFLAGS="${CXXFLAGS:-} -O2 -fPIC"
 
+curl_tls_arg=--without-ssl
+if [ -f "$PCCT_LIBDIR/libmbedtls.a" ] && \
+   [ -f "$PCCT_INCLUDEDIR/mbedtls/ssl.h" ]; then
+    curl_tls_arg="--with-mbedtls=$PCCT_PREFIX"
+fi
+
 case "$PCCT_TARGET" in
     x86)
         echo "Build X86"
@@ -45,7 +51,7 @@ case "$PCCT_TARGET" in
             --prefix="$PCCT_PREFIX" \
             --libdir="$PCCT_LIBDIR" \
             --includedir="$PCCT_INCLUDEDIR" \
-            --with-mbedtls="$PCCT_PREFIX" \
+            "$curl_tls_arg" \
             $COMMON_CURL_ARGS
         ;;
     x64|X64)
@@ -56,7 +62,7 @@ case "$PCCT_TARGET" in
             --prefix="$PCCT_PREFIX" \
             --libdir="$PCCT_LIBDIR" \
             --includedir="$PCCT_INCLUDEDIR" \
-            --without-ssl \
+            "$curl_tls_arg" \
             $COMMON_CURL_ARGS
         ;;
     arm)
@@ -73,7 +79,7 @@ case "$PCCT_TARGET" in
             --prefix="$PCCT_PREFIX" \
             --libdir="$PCCT_LIBDIR" \
             --includedir="$PCCT_INCLUDEDIR" \
-            --without-ssl \
+            "$curl_tls_arg" \
             $COMMON_CURL_ARGS
         ;;
     arm64|ARM64)
@@ -84,7 +90,7 @@ case "$PCCT_TARGET" in
             --prefix="$PCCT_PREFIX" \
             --libdir="$PCCT_LIBDIR" \
             --includedir="$PCCT_INCLUDEDIR" \
-            --without-ssl \
+            "$curl_tls_arg" \
             $COMMON_CURL_ARGS
         ;;
     la64|LA64)
@@ -95,7 +101,7 @@ case "$PCCT_TARGET" in
             --prefix="$PCCT_PREFIX" \
             --libdir="$PCCT_LIBDIR" \
             --includedir="$PCCT_INCLUDEDIR" \
-            --with-mbedtls="$PCCT_PREFIX" \
+            "$curl_tls_arg" \
             $COMMON_CURL_ARGS
         ;;
     *)

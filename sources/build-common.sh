@@ -34,6 +34,21 @@ pcct_bootstrap_autotools() {
     fi
 }
 
+pcct_refresh_config_scripts() {
+    if [ "$#" -ne 1 ]; then
+        echo "pcct_refresh_config_scripts expects one destination directory" >&2
+        exit 1
+    fi
+
+    config_aux_dir=/usr/share/misc
+    if [ ! -f "$config_aux_dir/config.sub" ] || \
+       [ ! -f "$config_aux_dir/config.guess" ]; then
+        config_aux_dir=$(automake --print-libdir)
+    fi
+    install -m 0755 "$config_aux_dir/config.sub" "$1/config.sub"
+    install -m 0755 "$config_aux_dir/config.guess" "$1/config.guess"
+}
+
 pcct_setup_target() {
     if [ "$#" -ne 1 ]; then
         echo "pcct_setup_target expects exactly one target argument" >&2
@@ -134,6 +149,10 @@ pcct_setup_target() {
             export STRIP="${STRIP:-aarch64-linux-gnu-strip}"
             export OBJCOPY="${OBJCOPY:-aarch64-linux-gnu-objcopy}"
             export OBJDUMP="${OBJDUMP:-aarch64-linux-gnu-objdump}"
+            export SYSROOT="$("$CC" -print-sysroot)"
+            if [ -z "$SYSROOT" ]; then
+                export SYSROOT=/
+            fi
             export PKG_CONFIG="${PKG_CONFIG:-pkg-config}"
             export PKG_CONFIG_LIBDIR="/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig:/usr/lib/pkgconfig"
             PCCT_HOST="aarch64-linux-gnu"
@@ -179,6 +198,42 @@ pcct_setup_target() {
     esac
 
     export PCCT_TARGET="$target" PCCT_HOST PCCT_BUILD PCCT_ARCH PCCT_PREFIX PCCT_LIBDIR PCCT_INCLUDEDIR PCCT_PKGCONFIGDIR PCCT_CROSS_PREFIX PCCT_IS_CROSS
+}
+
+pcct_assert_target_arch() {
+    if [ "$#" -ne 1 ]; then
+        echo "pcct_assert_target_arch expects exactly one path" >&2
+        exit 1
+    fi
+
+    case "${PCCT_TARGET:-}" in
+        x86)
+            file "$1" | grep -q 'ELF 32-bit.*Intel 80386'
+            ;;
+        x64|X64)
+            file "$1" | grep -q 'ELF 64-bit.*x86-64'
+            ;;
+        arm)
+            file "$1" | grep -q 'ELF 32-bit.*ARM'
+            ;;
+        arm64|ARM64)
+            file "$1" | grep -q 'ELF 64-bit.*ARM aarch64'
+            ;;
+        la64|LA64)
+            file "$1" | grep -q 'ELF 64-bit.*LoongArch'
+            ;;
+        *)
+            echo "unsupported target for ELF verification: ${PCCT_TARGET:-unset}" >&2
+            exit 1
+            ;;
+    esac
+}
+
+pcct_assert_target_file() {
+    pcct_assert_target_arch "$1"
+    if [ "${PCCT_TARGET:-}" = "arm" ]; then
+        file "$1" | grep -q 'EABI5'
+    fi
 }
 
 pcct_write_cmake_toolchain() {

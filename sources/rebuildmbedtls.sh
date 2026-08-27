@@ -3,7 +3,7 @@
 set -eu
 
 if [ "$#" -ne 1 ]; then
-    echo "usage: $0 <x86|la64>" >&2
+    echo "usage: $0 <x86|x64|arm|arm64|la64>" >&2
     exit 1
 fi
 
@@ -11,7 +11,7 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 . "$SCRIPT_DIR/build-common.sh"
 
 case "$1" in
-    x86|la64|LA64) ;;
+    x86|x64|X64|arm|arm64|ARM64|la64|LA64) ;;
     *)
         echo "unsupported target: $1" >&2
         exit 1

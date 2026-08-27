@@ -3,7 +3,7 @@
 set -eu
 
 if [ "$#" -ne 1 ]; then
-    echo "usage: $0 <x86|arm>" >&2
+    echo "usage: $0 <x86|x64|arm|arm64|la64>" >&2
     exit 1
 fi
 
@@ -12,14 +12,16 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 . "$SCRIPT_DIR/dependency-versions.sh"
 
 case "$1" in
-    x86|arm) ;;
+    x86|x64|X64|arm|arm64|ARM64|la64|LA64) ;;
     *)
-        echo "usage: $0 <x86|arm>" >&2
+        echo "usage: $0 <x86|x64|arm|arm64|la64>" >&2
         exit 1
         ;;
 esac
 
 pcct_setup_target "$1"
+
+cmake_install_libdir=${PCCT_LIBDIR#"$PCCT_PREFIX"/}
 
 cmake_toolchain_arg=
 opencv_cxx_flags="-O2 -fPIC"
@@ -44,7 +46,7 @@ cd build
 cmake .. $cmake_toolchain_arg \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$PCCT_PREFIX" \
-    -DCMAKE_INSTALL_LIBDIR=lib \
+    -DCMAKE_INSTALL_LIBDIR="$cmake_install_libdir" \
     -DCMAKE_C_FLAGS="-O2 -fPIC" \
     -DCMAKE_CXX_FLAGS="$opencv_cxx_flags" \
     -DBUILD_SHARED_LIBS=OFF \

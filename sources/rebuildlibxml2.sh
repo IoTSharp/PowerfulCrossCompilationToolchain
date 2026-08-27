@@ -2,15 +2,15 @@
 
 set -eu
 
-if [ "$#" -ne 1 ] || [ "$1" != "x86" ]; then
-    echo "usage: $0 x86" >&2
+if [ "$#" -ne 1 ]; then
+    echo "usage: $0 <x86|x64|arm|arm64|la64>" >&2
     exit 1
 fi
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 . "$SCRIPT_DIR/build-common.sh"
 
-pcct_setup_target x86
+pcct_setup_target "$1"
 pcct_reset_build_tree
 pcct_bootstrap_autotools
 

@@ -60,15 +60,13 @@ if [ "$PCCT_IS_CROSS" = "1" ]; then
     fi
 fi
 
-if [ "$PCCT_TARGET" = "x86" ]; then
+if [ -f "$PCCT_LIBDIR/libmbedtls.a" ] && \
+   [ -f "$PCCT_INCLUDEDIR/mbedtls/ssl.h" ]; then
     COMMON_ARGS="$COMMON_ARGS \
         --enable-version3 \
         --enable-network \
         --enable-mbedtls \
-        --enable-libdrm \
-        --enable-vaapi \
         --enable-decoder=h264 \
-        --enable-hwaccel=h264_vaapi \
         --enable-encoder=mjpeg \
         --enable-parser=h264 \
         --enable-bsf=h264_mp4toannexb \
@@ -82,7 +80,14 @@ if [ "$PCCT_TARGET" = "x86" ]; then
         --enable-protocol=tls \
         --enable-protocol=udp \
         --enable-protocol=rtp"
+    if [ "$PCCT_TARGET" = "x86" ]; then
+        COMMON_ARGS="$COMMON_ARGS \
+            --enable-libdrm \
+            --enable-vaapi \
+            --enable-hwaccel=h264_vaapi"
+    fi
 else
+    # x86Legacy does not build mbedTLS and retains its offline FFmpeg profile.
     COMMON_ARGS="$COMMON_ARGS --disable-network --enable-protocol=file"
 fi
 

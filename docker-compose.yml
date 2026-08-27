@@ -53,3 +53,8 @@ services:
     <<: *build-job
     image: ${PCCT_IMAGE_PREFIX:-ghcr.io/iotsharp}/pcct-build-loongson:${PCCT_IMAGE_TAG:-latest}
     platform: linux/amd64
+
+  centos79:
+    <<: *build-job
+    image: ${PCCT_IMAGE_PREFIX:-ghcr.io/iotsharp}/pcct-build-centos79:${PCCT_IMAGE_TAG:-latest}
+    platform: linux/amd64

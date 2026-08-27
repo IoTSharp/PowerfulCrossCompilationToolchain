@@ -50,7 +50,7 @@ test "$(printf '' | "$cc" -dM -E - | awk '/_FORTIFY_SOURCE/ { print $3 }')" = "0
 test "$(printf '' | "$cxx" -dM -E -x c++ - | \
     awk '/_GLIBCXX_USE_CXX11_ABI/ { print $3 }')" = "0"
 test "$("$cxx" -print-file-name=libstdc++.a)" = "$cxx_archive"
-"$pkg_config" --static --libs libcurl | grep -q -- '-lz'
+"$pkg_config" --static --libs libcurl | grep -q -- '-l:libz.a'
 "$pkg_config" --static --libs libpq | grep -q -- '-l:libpgcommon_shlib.a'
 "$pkg_config" --static --libs libpq | grep -q -- '-l:libpgport.a'
 test -f "$sysroot/usr/include/minigui/common.h"
