@@ -16,7 +16,7 @@ RUN apt-get update && \
 
 RUN chmod +x /work/*.sh && \
     /work/fetch-github-sources.sh /dist \
-        curl libxml2 freetype libusb sqlite ffmpeg postgresql \
+        curl libxml2 freetype libusb sqlite openh264 ffmpeg postgresql \
         libpeer libsrtp mbedtls laneapp-lvgl \
         cmake opencv mnn mnn-license hyperlpr nanodet-model nanodet-license
 
@@ -117,6 +117,8 @@ COPY sources/dependency-versions.sh /work/dependency-versions.sh
 COPY sources/export-vaapi-runtime.sh /work/export-vaapi-runtime.sh
 COPY sources/lane2nd-lv_conf.h /work/lane2nd-lv_conf.h
 COPY sources/rebuildffmpeg.sh /work/rebuildffmpeg.sh
+COPY sources/rebuildopenh264.sh /work/rebuildopenh264.sh
+COPY sources/verify-camera-codecs.sh /work/verify-camera-codecs.sh
 COPY sources/rebuildfreetype.sh /work/rebuildfreetype.sh
 COPY sources/rebuildcmake.sh /work/rebuildcmake.sh
 COPY sources/rebuildhyperlpr.sh /work/rebuildhyperlpr.sh
@@ -154,13 +156,14 @@ RUN test -f /usr/lib/i386-linux-gnu/libz.a && \
     chmod +x /work/*.sh && \
     /work/rebuildminigui.sh x86 && \
     /work/build-selected-deps.sh x86 \
-        mbedtls curl libxml2 freetype sqlite libusb ffmpeg postgresql \
+        mbedtls curl libxml2 freetype sqlite libusb openh264 ffmpeg postgresql \
         libpeer laneapp-lvgl cmake opencv mnn hyperlpr && \
     /work/rebuildnanodet.sh x86 && \
     find /usr/local/lib/pkgconfig -type f -name '*.pc' \
         -exec sed -i 's/-lz\([[:space:]]\|$\)/-l:libz.a\1/g' {} + && \
     /work/export-vaapi-runtime.sh && \
     /work/verify-x86-static.sh && \
+    timeout 120 /work/verify-camera-codecs.sh x86 && \
     rm -rf /dist /tmp/pcct-* /tmp/pcct-static-smoke*
 
 ENV LD_LIBRARY_PATH=/usr/local/lib \

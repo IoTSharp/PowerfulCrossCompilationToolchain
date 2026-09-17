@@ -67,12 +67,16 @@ if [ -f "$PCCT_LIBDIR/libmbedtls.a" ] && \
         --enable-network \
         --enable-mbedtls \
         --enable-decoder=h264 \
+        --enable-decoder=hevc \
         --enable-encoder=mjpeg \
         --enable-parser=h264 \
+        --enable-parser=hevc \
         --enable-bsf=h264_mp4toannexb \
+        --enable-bsf=hevc_mp4toannexb \
         --enable-demuxer=rtsp \
         --enable-demuxer=rtp \
         --enable-demuxer=h264 \
+        --enable-demuxer=hevc \
         --enable-protocol=file \
         --enable-protocol=http \
         --enable-protocol=https \
@@ -80,6 +84,11 @@ if [ -f "$PCCT_LIBDIR/libmbedtls.a" ] && \
         --enable-protocol=tls \
         --enable-protocol=udp \
         --enable-protocol=rtp"
+    if [ -f "$PCCT_LIBDIR/libopenh264.a" ]; then
+        # H.265 camera input is converted to baseline H.264 for WebRTC.
+        COMMON_ARGS="$COMMON_ARGS --enable-libopenh264 --enable-encoder=libopenh264"
+        CFG_ARGS="$CFG_ARGS --pkg-config-flags=--static"
+    fi
     if [ "$PCCT_TARGET" = "x86" ]; then
         COMMON_ARGS="$COMMON_ARGS \
             --enable-libdrm \
@@ -94,7 +103,8 @@ fi
 # shellcheck disable=SC2086
 ./configure $CFG_ARGS $COMMON_ARGS
 
-make -j"$(pcct_nproc)"
+# Keep media-library builds bounded on developer hosts and CI runners.
+make -j"${PCCT_CODEC_JOBS:-4}"
 make install
 
 # glibc before 2.17 keeps clock_gettime in librt. Export it from libavutil so

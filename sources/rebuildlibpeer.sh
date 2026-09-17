@@ -13,6 +13,12 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 
 pcct_setup_target "$1"
 
+# Export the static encoder closure to C consumers of the aggregate package.
+camera_codec_requires=
+if [ -f "$PCCT_LIBDIR/libopenh264.a" ]; then
+    camera_codec_requires=openh264
+fi
+
 ffmpeg_platform_libs=
 if [ "$PCCT_TARGET" = "x86" ]; then
     ffmpeg_platform_libs="-lva -lva-drm -ldrm"
@@ -69,6 +75,7 @@ libdir=$PCCT_LIBDIR
 Name: laneapp-webrtc
 Description: Static LaneApp libpeer and network-enabled FFmpeg runtime
 Version: 1.0
+Requires.private: $camera_codec_requires
 Cflags: -I\${includedir}/libpeer
 Libs: -L\${libdir} -l:libpeer.a -l:libsrtp2.a -l:libavformat.a -l:libavcodec.a -l:libswscale.a -l:libavutil.a -l:libmbedtls.a -l:libmbedx509.a -l:libmbedcrypto.a $ffmpeg_platform_libs -pthread -ldl -lm -lrt -l:libz.a
 EOF

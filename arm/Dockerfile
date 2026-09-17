@@ -16,7 +16,7 @@ RUN apt-get update && \
 
 RUN chmod +x /work/*.sh && \
     /work/fetch-github-sources.sh /dist \
-        curl libxml2 freetype libusb sqlite ffmpeg lvgl postgresql \
+        curl libxml2 freetype libusb sqlite openh264 ffmpeg lvgl postgresql \
         libpeer libsrtp mbedtls laneapp-lvgl \
         cmake opencv mnn mnn-license hyperlpr nanodet-model nanodet-license
 
@@ -56,6 +56,8 @@ COPY sources/lane2nd-lv_conf.h /work/lane2nd-lv_conf.h
 COPY sources/pcct-arm-gcc54-wrapper /usr/local/bin/pcct-arm-gcc54-wrapper
 COPY sources/pcct-arm-pkg-config /usr/local/bin/pcct-arm-pkg-config
 COPY sources/rebuildffmpeg.sh /work/rebuildffmpeg.sh
+COPY sources/rebuildopenh264.sh /work/rebuildopenh264.sh
+COPY sources/verify-camera-codecs.sh /work/verify-camera-codecs.sh
 COPY sources/rebuildfreetype.sh /work/rebuildfreetype.sh
 COPY sources/rebuildcmake.sh /work/rebuildcmake.sh
 COPY sources/rebuildhyperlpr.sh /work/rebuildhyperlpr.sh
@@ -250,7 +252,7 @@ RUN env \
     /work/build-selected-deps.sh arm mbedtls libxml2 freetype && \
     /work/rebuildminigui.sh arm && \
     /work/build-selected-deps.sh arm \
-        sqlite libusb curl ffmpeg postgresql libpeer lvgl laneapp-lvgl \
+        sqlite libusb curl openh264 ffmpeg postgresql libpeer lvgl laneapp-lvgl \
         opencv mnn hyperlpr && \
     /work/rebuildnanodet.sh arm && \
     . /work/build-common.sh && \
@@ -258,6 +260,7 @@ RUN env \
     pcct_enforce_static_zlib && \
     /work/verify-aligned-static.sh arm && \
     /work/verify-arm-gcc54.sh && \
+    timeout 120 /work/verify-camera-codecs.sh arm && \
     rm -rf /dist /tmp/pcct-*
 
 WORKDIR /tmp/LaneApp

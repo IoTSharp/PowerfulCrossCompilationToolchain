@@ -57,6 +57,13 @@ FFMPEG_ARCHIVE="ffmpeg-${FFMPEG_TAG}.tar.gz"
 FFMPEG_URL="https://github.com/FFmpeg/FFmpeg/archive/refs/tags/${FFMPEG_TAG}.tar.gz"
 FFMPEG_SHA256="36D12B77917CEF669484C39FE9ECEA6FEDC26D0F12A5B01C154BCC64AFF86019"
 
+# X86 and ARM32 camera profiles use a source-built, static H.264 encoder.
+OPENH264_VERSION=2.6.0
+OPENH264_TAG=v2.6.0
+OPENH264_ARCHIVE="openh264-${OPENH264_TAG}.tar.gz"
+OPENH264_URL="https://github.com/cisco/openh264/archive/refs/tags/${OPENH264_TAG}.tar.gz"
+OPENH264_SHA256="558544AD358283A7AB2930D69A9CEDDF913F4A51EE9BF1BFB9E377322AF81A69"
+
 # LaneApp HyperLPR3 is built for X86 and legacy ARM32. These revisions remain
 # shared so each image fetches once and LaneApp builds stay offline.
 CMAKE_VERSION=3.14.7
@@ -144,6 +151,7 @@ pcct_dep_archive() {
         libusb) echo "$LIBUSB_ARCHIVE" ;;
         sqlite) echo "$SQLITE_ARCHIVE" ;;
         ffmpeg) echo "$FFMPEG_ARCHIVE" ;;
+        openh264) echo "$OPENH264_ARCHIVE" ;;
         cmake) echo "$CMAKE_ARCHIVE" ;;
         opencv) echo "$OPENCV_ARCHIVE" ;;
         mnn) echo "$MNN_ARCHIVE" ;;
@@ -175,6 +183,7 @@ pcct_dep_url() {
         libusb) echo "$LIBUSB_URL" ;;
         sqlite) echo "$SQLITE_URL" ;;
         ffmpeg) echo "$FFMPEG_URL" ;;
+        openh264) echo "$OPENH264_URL" ;;
         cmake) echo "$CMAKE_URL" ;;
         opencv) echo "$OPENCV_URL" ;;
         mnn) echo "$MNN_URL" ;;
@@ -206,6 +215,7 @@ pcct_dep_sha256() {
         libusb) echo "$LIBUSB_SHA256" ;;
         sqlite) echo "$SQLITE_SHA256" ;;
         ffmpeg) echo "$FFMPEG_SHA256" ;;
+        openh264) echo "$OPENH264_SHA256" ;;
         cmake) echo "$CMAKE_SHA256" ;;
         opencv) echo "$OPENCV_SHA256" ;;
         mnn) echo "$MNN_SHA256" ;;
@@ -237,6 +247,7 @@ pcct_dep_version() {
         libusb) echo "$LIBUSB_VERSION" ;;
         sqlite) echo "$SQLITE_VERSION" ;;
         ffmpeg) echo "$FFMPEG_VERSION" ;;
+        openh264) echo "$OPENH264_VERSION" ;;
         cmake) echo "$CMAKE_VERSION" ;;
         opencv) echo "$OPENCV_VERSION" ;;
         mnn) echo "$MNN_VERSION" ;;
